@@ -29,6 +29,7 @@ export default function AgentDashboard() {
   const [input, setInput] = useState('');
   const [search, setSearch] = useState('');
   const [status, setStatus] = useState('online');
+  const statusRef = useRef('online');
   const socketRef = useRef<Socket | null>(null);
   const selectedIdRef = useRef<string | null>(null);
   const historyRequestRef = useRef(0);
@@ -45,9 +46,13 @@ export default function AgentDashboard() {
 
     const socket = io('/', {
       path: '/socket.io',
-      auth: { token }
+      auth: (callback) => callback({ token, status: statusRef.current })
     });
     socketRef.current = socket;
+    socket.on('agent_status_current', (currentStatus: string) => {
+      statusRef.current = currentStatus;
+      setStatus(currentStatus);
+    });
 
     socket.on('new_message', (msg: Message) => {
       if (msg.conversation_id === selectedIdRef.current) {
@@ -127,6 +132,7 @@ export default function AgentDashboard() {
             value={status}
             onChange={(e) => {
               setStatus(e.target.value);
+              statusRef.current = e.target.value;
               socketRef.current?.emit('agent_status', e.target.value);
             }}
             className="text-sm border rounded px-2 py-1 bg-background"

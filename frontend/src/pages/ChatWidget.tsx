@@ -30,6 +30,11 @@ export default function ChatWidget() {
     const socket = io('/', { path: '/socket.io' });
     socketRef.current = socket;
 
+    socket.on('support_availability', (availability: { online: boolean }) => {
+      setAgentOnline(availability.online);
+    });
+    socket.on('disconnect', () => setAgentOnline(false));
+
     socket.on('connect', () => {
       socket.emit('visitor_join', { visitorId, conversationId });
     });

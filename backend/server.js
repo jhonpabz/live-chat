@@ -131,6 +131,14 @@ app.get('/api/settings', async (req, res) => {
 
 // ===== Socket.io =====
 
+// Availability follows live connections, so stale database statuses cannot keep
+// support online after the last agent disconnects.
+const agentConnections = new Map();
+const supportAvailability = () => ({
+  online: [...agentConnections.values()].some(agent => agent.status === 'online')
+});
+const broadcastAvailability = () => io.emit('support_availability', supportAvailability());
+
 io.use(async (socket, next) => {
   const token = socket.handshake.auth.token;
   if (token) {
@@ -147,13 +155,30 @@ io.use(async (socket, next) => {
 
 io.on('connection', (socket) => {
   console.log('Client connected:', socket.id);
+  socket.emit('support_availability', supportAvailability());
 
   // Agent joins
   if (socket.isAgent) {
     socket.join('agents');
-    redisClient.set(`agent:${socket.user.id}:online`, '1', { EX: 60 });
+    const existing = [...agentConnections.values()].find(agent => agent.id === socket.user.id);
+    const initialStatus = existing?.status || (socket.handshake.auth.status === 'offline' ? 'offline' : 'online');
+    agentConnections.set(socket.id, { id: socket.user.id, status: initialStatus });
+    socket.emit('agent_status_current', initialStatus);
+    broadcastAvailability();
     socket.on('agent_status', async (status) => {
-      await pool.query('UPDATE agents SET status = $1 WHERE id = $2', [status, socket.user.id]);
+      if (status !== 'online' && status !== 'offline') return;
+      for (const [connectionId, agent] of agentConnections) {
+        if (agent.id === socket.user.id) {
+          agent.status = status;
+          io.to(connectionId).emit('agent_status_current', status);
+        }
+      }
+      broadcastAvailability();
+      try {
+        await pool.query('UPDATE agents SET status = $1 WHERE id = $2', [status, socket.user.id]);
+      } catch (err) {
+        console.error('Could not persist agent status:', err);
+      }
       io.to('agents').emit('agent_status_update', { id: socket.user.id, status });
     });
   }
@@ -257,6 +282,10 @@ io.on('connection', (socket) => {
   });
 
   socket.on('disconnect', () => {
+    if (socket.isAgent) {
+      agentConnections.delete(socket.id);
+      broadcastAvailability();
+    }
     if (socket.visitorId) {
       redisClient.del(`visitor:${socket.visitorId}:online`);
       io.to('agents').emit('visitor_offline', { visitorId: socket.visitorId });

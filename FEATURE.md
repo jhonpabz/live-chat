@@ -4,6 +4,8 @@ This list describes the current implementation. Partially implemented features r
 
 ## Implemented Features
 
+- **Agent availability** — Widget shows Online when at least one connected agent is online, and Offline otherwise. Updates on status changes, connections, and disconnects; tabs for the same agent stay synchronized.
+
 - **Agent login** — Email/password authentication using JWT and hashed passwords.
 - **Real-time messaging** — Visitors and agents exchange text messages through Socket.IO.
 - **Floating chat widget** — Visitors can open and close the support window.
@@ -22,7 +24,6 @@ This list describes the current implementation. Partially implemented features r
 
 ## Partially Implemented Features
 
-- **Agent availability** — Dashboard has an online/offline selector, but the widget's indicator is not connected and stays "Offline."
 - **Visitor presence** — Redis tracking and socket events exist, but no dashboard presence indicator.
 - **Typing indicators** — Backend events exist; UI integration is missing.
 - **Quick replies** — Database and read API exist; no dashboard picker or editor.
