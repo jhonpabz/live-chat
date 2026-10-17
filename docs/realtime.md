@@ -56,6 +56,11 @@ Supported request events:
   is rejected. Resolved conversations reject new sends.
 - `agent_status`: `'online' | 'offline'`. Agent-only. Returns `{ status }` and
   synchronizes every live connection for that agent through `agent_status_current`.
+- `visitor_presence`: `{ visitorIds: string[] }`. Agent-only snapshot for up to 100
+  visitor database UUIDs. Returns `{ onlineVisitorIds: string[] }`; requested IDs
+  absent from the result are offline. Used when loading conversations and after
+  reconnect. The dashboard applies live transitions received during a snapshot
+  ahead of that snapshot, preventing stale online/offline indicators.
 - `typing`: `{ conversationId, isTyping }`. Requires conversation access; broadcasts
   are throttled to one per 500 ms per socket. Returns `{}`. UI integration is pending.
 
@@ -70,7 +75,12 @@ Server events:
 - `support_availability`: `{ online }`; initial snapshot and connection/status changes.
 - `agent_status_current`: `'online' | 'offline'` for the connected agent.
 - `visitor_online` / `visitor_offline`: `{ visitorId }` to agents. Offline is emitted
-  only when the visitor's last socket disconnects.
+  only when the visitor's last socket disconnects. IDs are database UUIDs matching
+  `visitor_identity_id` in agent conversation responses, not the public `visitor_id`
+  label. Visitors are online once joined, even if their widget is minimized. Abrupt
+  network loss is detected by Socket.IO heartbeat timeout. Redis leases continue
+  to renew/expire as documented in the README; the live snapshot uses this backend's
+  active sockets and remains available if the Redis cache is degraded.
 - `service_state`: `{ redis }`; reports degraded presence caching.
 - `session_expired`: emitted before a socket is disconnected for expiry.
 - `request_error`: `{ code, message }`; also used when a request has no callback.
@@ -95,6 +105,8 @@ manual history reconciliation recovers messages committed before a process failu
 
 - `GET /api/conversations?limit=50&before=<conversationId>` returns
   `{ conversations, hasMore }`, ordered by `(updated_at, id)` descending.
+  Rows include `visitor_identity_id`, the database UUID used for presence lookup,
+  alongside the existing public `visitor_id` label.
   Active conversations can move between pages as new messages arrive; the UI
   deduplicates pages and refreshes the newest page on updates.
 - `GET /api/conversations/:id/messages` accepts the same history query fields as

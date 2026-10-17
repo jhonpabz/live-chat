@@ -13,6 +13,7 @@ export interface Message {
 export interface Conversation {
   id: string;
   visitor_id: string;
+  visitor_identity_id: string;
   status: string;
   last_message: string | null;
   ip_address: string | null;
@@ -22,6 +23,7 @@ export interface Conversation {
 export interface HistoryPage { messages: Message[]; hasMore: boolean }
 export interface ConversationPage { conversations: Conversation[]; hasMore: boolean }
 export interface Ready { conversationId: string; visitorToken: string }
+export interface VisitorPresence { onlineVisitorIds: string[] }
 export interface Failure { code: string; message: string }
 export type Ack<T> = { ok: true; data: T } | { ok: false; error: Failure };
 export interface SendMessage { conversationId: string; content: string; clientMessageId: string }
@@ -33,6 +35,8 @@ interface ServerEvents {
   conversation_ready: (data: Ready) => void;
   support_availability: (data: { online: boolean }) => void;
   agent_status_current: (status: AgentStatus) => void;
+  visitor_online: (data: { visitorId: string }) => void;
+  visitor_offline: (data: { visitorId: string }) => void;
   service_state: (data: { redis: boolean }) => void;
   session_expired: () => void;
   request_error: (error: Failure) => void;
@@ -42,6 +46,7 @@ interface ClientEvents {
   message_history: (data: HistoryRequest, ack: (result: Ack<HistoryPage>) => void) => void;
   send_message: (data: SendMessage, ack: (result: Ack<Message>) => void) => void;
   agent_status: (status: AgentStatus, ack: (result: Ack<{ status: AgentStatus }>) => void) => void;
+  visitor_presence: (data: { visitorIds: string[] }, ack: (result: Ack<VisitorPresence>) => void) => void;
 }
 export type ChatSocket = Socket<ServerEvents, ClientEvents>;
 
@@ -59,7 +64,7 @@ export function isHistory(value: unknown): value is HistoryPage {
 export function isConversationPage(value: unknown): value is ConversationPage {
   return record(value) && typeof value.hasMore === 'boolean' && Array.isArray(value.conversations)
     && value.conversations.every(item => record(item) && typeof item.id === 'string' && typeof item.visitor_id === 'string'
-      && typeof item.status === 'string' && typeof item.updated_at === 'string'
+      && typeof item.visitor_identity_id === 'string' && typeof item.status === 'string' && typeof item.updated_at === 'string'
       && [item.last_message, item.ip_address, item.location].every(field => field === null || typeof field === 'string'));
 }
 export function mergeMessages(current: Message[], incoming: Message[]): Message[] {

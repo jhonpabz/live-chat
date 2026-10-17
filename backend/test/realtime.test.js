@@ -58,6 +58,13 @@ test('real HTTP/socket flow: authentication, own echoes, retries, reconnect hist
   const supportOnline = event(visitor, 'support_availability');
   const agent = await connect({ token: auth.agentToken({ id: agentId }) });
   assert.equal((await supportOnline).online, true);
+  const visitorId = auth.visitor(ready.data.visitorToken).id;
+  const offlineVisitorId = randomUUID();
+  const snapshot = () => acknowledge(agent, 'visitor_presence', { visitorIds: [visitorId, offlineVisitorId] });
+  assert.deepEqual((await snapshot()).data.onlineVisitorIds, [visitorId]);
+  assert.equal((await acknowledge(visitor, 'visitor_presence', { visitorIds: [visitorId] })).error.code, 'FORBIDDEN');
+  assert.equal((await acknowledge(agent, 'visitor_presence', { visitorIds: ['invalid'] })).error.code, 'INVALID_INPUT');
+  assert.equal((await acknowledge(agent, 'visitor_presence', { visitorIds: Array(101).fill(visitorId) })).error.code, 'INVALID_INPUT');
 
   const ownEcho = event(agent, 'new_message');
   const visitorEcho = event(visitor, 'new_message');
@@ -78,11 +85,29 @@ test('real HTTP/socket flow: authentication, own echoes, retries, reconnect hist
   assert.equal(crossRead.error.code, 'NOT_FOUND');
   assert.equal(crossSend.error.code, 'NOT_FOUND');
 
+  const secondTab = await connect({ visitorToken: ready.data.visitorToken });
+  await acknowledge(secondTab, 'visitor_join', {});
+  let offlineEvents = 0;
+  agent.on('visitor_offline', data => { if (data.visitorId === visitorId) offlineEvents++; });
+  const firstDisconnected = once(io.sockets.sockets.get(visitor.id), 'disconnect');
   visitor.disconnect();
+  await firstDisconnected;
+  assert.deepEqual((await snapshot()).data.onlineVisitorIds, [visitorId]);
+  assert.equal(offlineEvents, 0);
+  const visitorOffline = event(agent, 'visitor_offline');
+  secondTab.disconnect();
+  assert.equal((await visitorOffline).visitorId, visitorId);
+  assert.deepEqual((await snapshot()).data.onlineVisitorIds, []);
+  assert.equal(offlineEvents, 1);
   const secondMessage = await acknowledge(agent, 'send_message', { ...payload, clientMessageId: randomUUID(), content: 'sent while disconnected' });
   const returning = await connect({ visitorToken: ready.data.visitorToken });
+  const visitorOnline = event(agent, 'visitor_online');
   const joined = await acknowledge(returning, 'visitor_join', {});
+  assert.equal((await visitorOnline).visitorId, visitorId);
+  assert.deepEqual((await snapshot()).data.onlineVisitorIds, [visitorId]);
   assert.equal(joined.data.conversationId, conversationId);
+  const refreshedAgent = await connect({ token: auth.agentToken({ id: agentId }) });
+  assert.deepEqual((await acknowledge(refreshedAgent, 'visitor_presence', { visitorIds: [visitorId] })).data.onlineVisitorIds, [visitorId]);
   const recovered = await acknowledge(returning, 'message_history', { conversationId, after: saved.data.id });
   assert.equal(recovered.data.messages[0].id, secondMessage.data.id);
 

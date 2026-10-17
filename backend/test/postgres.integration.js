@@ -20,6 +20,8 @@ test('isolated PostgreSQL: migration, concurrent retries, transaction rollback, 
   const chat = createChatService(repository);
   const joined = await chat.joinVisitor(null, '127.0.0.1');
   const visitor = { role: 'visitor', id: joined.visitorId };
+  const listed = await chat.list({});
+  assert.equal(listed.conversations[0].visitor_identity_id, joined.visitorId);
   const payload = { conversationId: joined.conversationId, clientMessageId: randomUUID(), content: 'help' };
   await pool.query("INSERT INTO knowledge_base (keyword, response) VALUES ('help', 'Reply')");
   const [first, retry] = await Promise.all([chat.send(visitor, payload), chat.send(visitor, payload)]);

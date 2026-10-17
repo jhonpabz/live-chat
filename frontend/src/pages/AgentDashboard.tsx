@@ -4,9 +4,11 @@ import { MessageSquare, CheckCircle, Search } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { MessageComposer } from '@/components/MessageComposer';
 import { MessageList } from '@/components/MessageList';
+import { VisitorPresenceIndicator } from '@/components/VisitorPresenceIndicator';
 import { useChatSession } from '@/features/chat/useChatSession';
 import { useMessages } from '@/features/chat/useMessages';
 import { useInbox } from '@/features/inbox/useInbox';
+import { useVisitorPresence } from '@/features/inbox/useVisitorPresence';
 import { api, errorMessage, RequestError } from '@/lib/api';
 import { isHistory, record, type Conversation } from '@/lib/contracts';
 
@@ -16,6 +18,10 @@ export default function AgentDashboard() {
   const session = useChatSession('agent', token || undefined);
   const inbox = useInbox(session.socket, session.connected, token);
   const [selected, setSelected] = useState<Conversation | null>(null);
+  const visitors = useVisitorPresence(session.socket, session.connected, [
+    ...inbox.conversations.map(conversation => conversation.visitor_identity_id),
+    ...(selected ? [selected.visitor_identity_id] : [])
+  ]);
   const [search, setSearch] = useState('');
   const [error, setError] = useState('');
   const [resolving, setResolving] = useState(false);
@@ -64,6 +70,7 @@ export default function AgentDashboard() {
     <div className="h-screen flex flex-col bg-background">
       {!session.connected && <div className="p-2 border-b text-sm" role="status">Connecting to support server… <button className="underline" onClick={session.reconnect}>Reconnect</button></div>}
       {session.degraded && <p className="p-2 border-b text-sm" role="status">Presence cache is unavailable. Chat remains connected to this server.</p>}
+      {visitors.error && <div className="p-2 border-b text-sm" role="alert">Visitor presence could not be loaded. <button className="underline" onClick={visitors.refresh}>Retry presence</button></div>}
       {visibleError && <div className="p-2 text-sm text-destructive" role="alert">{visibleError} <button className="underline" onClick={() => { void inbox.refresh(); void chat.synchronize(); }}>Retry loading</button></div>}
       <div className="flex flex-1 min-h-0">
         <aside className="w-56 sm:w-80 border-r flex flex-col">
@@ -90,6 +97,7 @@ export default function AgentDashboard() {
                   <span className="text-xs text-muted-foreground">{new Date(conversation.updated_at).toLocaleTimeString()}</span>
                 </div>
                 <p className="text-sm text-muted-foreground truncate mt-1">{conversation.last_message || 'No messages'}</p>
+                <VisitorPresenceIndicator status={visitors.status(conversation.visitor_identity_id)} />
               </button>
             ))}
             {inbox.hasMore && <Button variant="outline" className="m-3" disabled={inbox.loading} onClick={() => { void inbox.loadMore(); }}>Load more conversations</Button>}
@@ -98,7 +106,7 @@ export default function AgentDashboard() {
         <main className="flex-1 min-w-0 flex flex-col">
           {selected ? <>
             <div className="p-4 border-b flex justify-between items-center gap-2">
-              <div><h2 className="font-semibold">Conversation</h2><p className="text-xs text-muted-foreground">IP: {selected.ip_address || 'N/A'} | {selected.location || 'Unknown'}</p></div>
+              <div><h2 className="font-semibold">Conversation</h2><VisitorPresenceIndicator status={visitors.status(selected.visitor_identity_id)} /><p className="text-xs text-muted-foreground">IP: {selected.ip_address || 'N/A'} | {selected.location || 'Unknown'}</p></div>
               <Button variant="outline" size="sm" disabled={resolving || selected.status === 'resolved'} onClick={() => { void resolve(); }}><CheckCircle className="h-4 w-4 mr-1" />{selected.status === 'resolved' ? 'Resolved' : resolving ? 'Resolving…' : 'Resolve'}</Button>
             </div>
             <MessageList messages={chat.messages} ownSender="agent" loading={chat.loading} hasOlder={chat.hasOlder} onLoadOlder={() => { void chat.loadOlder(); }} />

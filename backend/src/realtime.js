@@ -113,6 +113,16 @@ function registerRealtime({ io, auth, chat, redisClient }) {
       return { status };
     });
 
+    handle('visitor_presence', payload => {
+      if (socket.data.identity?.role !== 'agent') throw new AppError(403, 'FORBIDDEN', 'Agent access required.');
+      const input = object(payload);
+      if (!Array.isArray(input.visitorIds) || input.visitorIds.length > 100) {
+        throw new AppError(400, 'INVALID_INPUT', 'Request at most 100 visitor IDs.');
+      }
+      const visitorIds = [...new Set(input.visitorIds.map(id => uuid(id, 'visitorId')))];
+      return { onlineVisitorIds: presence.onlineVisitors(visitorIds) };
+    });
+
     handle('visitor_join', async payload => {
       object(payload);
       if (socket.data.identity?.role === 'agent') throw new AppError(403, 'FORBIDDEN', 'Use the agent inbox.');

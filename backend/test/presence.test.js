@@ -33,3 +33,16 @@ test('one visitor tab disconnect does not mark another connected tab offline', (
   assert.equal(presence.disconnect('tab1'), null);
   assert.equal(presence.disconnect('tab2').id, 'visitor');
 });
+
+test('visitor snapshots include only requested visitors with a live connection', () => {
+  const presence = new Presence();
+  presence.connect('visitor1', { role: 'visitor', id: 'v1' });
+  presence.connect('visitor2', { role: 'visitor', id: 'v1' });
+  presence.connect('visitor3', { role: 'visitor', id: 'v2' });
+  presence.connect('agent', { role: 'agent', id: 'a' });
+  assert.deepEqual(presence.onlineVisitors(['v1', 'offline', 'a']), ['v1']);
+  presence.disconnect('visitor1');
+  assert.deepEqual(presence.onlineVisitors(['v1']), ['v1']);
+  presence.disconnect('visitor2');
+  assert.deepEqual(presence.onlineVisitors(['v1', 'v2']), ['v2']);
+});

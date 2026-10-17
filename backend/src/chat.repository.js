@@ -51,7 +51,7 @@ function createChatRepository(pool) {
     },
     async list({ limit, before }) {
       const result = await pool.query(`
-        SELECT c.id, c.status, c.updated_at, v.visitor_id, v.ip_address, v.location,
+        SELECT c.id, c.status, c.updated_at, v.visitor_id, v.id AS visitor_identity_id, v.ip_address, v.location,
           (SELECT content FROM messages WHERE conversation_id = c.id ORDER BY created_at DESC, id DESC LIMIT 1) AS last_message
         FROM conversations c JOIN visitors v ON c.visitor_id = v.id
         WHERE (c.status != 'resolved' OR c.updated_at > NOW() - INTERVAL '7 days')
