@@ -160,7 +160,12 @@ io.on('connection', (socket) => {
 
   // Visitor joins
   socket.on('visitor_join', async (data) => {
-    const { visitorId, conversationId } = data;
+    const { visitorId, conversationId } = data || {};
+    if (!visitorId) {
+      console.log('visitor_join ignored: missing visitorId');
+      return;
+    }
+
     socket.visitorId = visitorId;
     socket.join(`visitor:${visitorId}`);
     if (conversationId) {
@@ -172,7 +177,7 @@ io.on('connection', (socket) => {
     if (visitorResult.rows.length === 0) {
       visitorResult = await pool.query(
         'INSERT INTO visitors (visitor_id, ip_address) VALUES ($1, $2) RETURNING id',
-        [visitorId, socket.handshake.address]
+        [visitorId, socket.handshake.address || '127.0.0.1']
       );
     }
     const visitorDbId = visitorResult.rows[0].id;
