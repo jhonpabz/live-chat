@@ -224,7 +224,7 @@ io.on('connection', (socket) => {
       await pool.query('UPDATE conversations SET updated_at = NOW() WHERE id = $1', [conversationId]);
 
       // Broadcast
-      io.to(`conversation:${conversationId}`).emit('new_message', message);
+      io.to(`conversation:${conversationId}`).to('agents').emit('new_message', message);
       io.to('agents').emit('conversation_update', { conversationId, lastMessage: content });
 
       // Simple KB auto-reply for visitors
@@ -239,7 +239,7 @@ io.on('connection', (socket) => {
              VALUES ($1, 'system', 'kb', $2, 'text') RETURNING *`,
             [conversationId, kb.rows[0].response]
           );
-          io.to(`conversation:${conversationId}`).emit('new_message', autoMsg.rows[0]);
+          io.to(`conversation:${conversationId}`).to('agents').emit('new_message', autoMsg.rows[0]);
         }
       }
     } catch (err) {

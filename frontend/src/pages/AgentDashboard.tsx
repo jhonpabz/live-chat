@@ -16,6 +16,7 @@ interface Conversation {
 
 interface Message {
   id: string;
+  conversation_id: string;
   content: string;
   sender_type: string;
   created_at: string;
@@ -29,6 +30,8 @@ export default function AgentDashboard() {
   const [search, setSearch] = useState('');
   const [status, setStatus] = useState('online');
   const socketRef = useRef<Socket | null>(null);
+  const selectedIdRef = useRef<string | null>(null);
+  const historyRequestRef = useRef(0);
   const navigate = useNavigate();
   const token = localStorage.getItem('token');
 
@@ -47,16 +50,19 @@ export default function AgentDashboard() {
     socketRef.current = socket;
 
     socket.on('new_message', (msg: Message) => {
-      if (selected && msg.conversation_id === selected.id) { // note: need conversation_id in msg
-        setMessages(prev => [...prev, msg]);
+      if (msg.conversation_id === selectedIdRef.current) {
+        setMessages(prev => prev.some(message => message.id === msg.id) ? prev : [...prev, msg]);
       }
       fetchConversations();
     });
 
     socket.on('conversation_update', () => fetchConversations());
 
-    return () => socket.disconnect();
-  }, [token, selected]);
+    return () => {
+      socket.disconnect();
+      socketRef.current = null;
+    };
+  }, [token]);
 
   const fetchConversations = async () => {
     const res = await fetch('/api/conversations', {
@@ -66,12 +72,22 @@ export default function AgentDashboard() {
   };
 
   const selectConversation = async (conv: Conversation) => {
+    const requestId = ++historyRequestRef.current;
+    selectedIdRef.current = conv.id;
     setSelected(conv);
+    setMessages([]);
     const res = await fetch(`/api/conversations/${conv.id}/messages`, {
       headers: { Authorization: `Bearer ${token}` }
     });
-    if (res.ok) setMessages(await res.json());
-    socketRef.current?.emit('visitor_join', { conversationId: conv.id }); // join room
+    if (res.ok) {
+      const history: Message[] = await res.json();
+      if (requestId !== historyRequestRef.current || selectedIdRef.current !== conv.id) return;
+      // Preserve messages received while history was loading, without duplicates.
+      setMessages(current => [
+        ...history,
+        ...current.filter(message => !history.some(saved => saved.id === message.id))
+      ]);
+    }
   };
 
   const sendMessage = () => {
@@ -90,6 +106,8 @@ export default function AgentDashboard() {
       method: 'POST',
       headers: { Authorization: `Bearer ${token}` }
     });
+    selectedIdRef.current = null;
+    ++historyRequestRef.current;
     setSelected(null);
     fetchConversations();
   };
