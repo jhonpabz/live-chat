@@ -6,6 +6,7 @@
   "scripts": {
     "start": "node server.js",
     "dev": "nodemon server.js",
+    "db:migrate": "node scripts/migrate.js",
     "test": "node --test test/*.test.js",
     "test:postgres": "node scripts/test-postgres.js"
   },

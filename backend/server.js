@@ -56,7 +56,7 @@ async function start() {
     console.log(JSON.stringify({ event: 'server_started', port: config.port }));
   } catch (error) {
     await shutdown();
-    if (error.code === '42703') throw new Error('Apply backend/migrations/001_message_idempotency.sql before starting the server.');
+    if (error.code === '42703') throw new Error('Run npm run db:migrate from the backend directory before starting the server.');
     throw error;
   }
 }

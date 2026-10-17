@@ -35,11 +35,13 @@ Redis must be available locally; PostgreSQL is the durable source of truth.
    For an **existing** installation, apply the additive migration instead:
 
    ```sh
-   psql -d livechat -f backend/migrations/001_message_idempotency.sql
+   cd backend
+   npm run db:migrate
    ```
 
-   The migration preserves existing conversations and messages. Use your actual
-   database connection options if they differ. The backend checks for the new
+   The command reads `DATABASE_URL` from `backend/.env` and does not require the
+   `psql` command. The migration preserves existing conversations and messages.
+   The backend checks for the new
    column before accepting traffic; it does not run migrations automatically.
 
 2. In `backend`, run `npm install`, copy `.env.example` to `.env`, and set:
