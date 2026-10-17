@@ -43,6 +43,7 @@ CREATE TABLE IF NOT EXISTS messages (
     sender_id VARCHAR(255), -- agent id or visitor id
     content TEXT NOT NULL,
     message_type VARCHAR(20) DEFAULT 'text', -- text, image, emoji
+    client_message_id UUID, -- sender-scoped retry key; NULL for legacy/system messages
     is_read BOOLEAN DEFAULT FALSE,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
@@ -76,6 +77,11 @@ CREATE INDEX IF NOT EXISTS idx_conversations_visitor ON conversations(visitor_id
 CREATE INDEX IF NOT EXISTS idx_conversations_status ON conversations(status);
 CREATE INDEX IF NOT EXISTS idx_messages_conversation ON messages(conversation_id);
 CREATE INDEX IF NOT EXISTS idx_messages_created ON messages(created_at);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_messages_sender_request
+    ON messages (conversation_id, sender_type, sender_id, client_message_id)
+    WHERE client_message_id IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_messages_history ON messages (conversation_id, created_at, id);
+CREATE INDEX IF NOT EXISTS idx_conversations_updated ON conversations (updated_at, id);
 
 -- Default settings
 INSERT INTO settings (key, value) VALUES 
