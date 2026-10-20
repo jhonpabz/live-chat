@@ -117,6 +117,9 @@ npm run build
 
 ## Operations and limits
 
+For a step-by-step Ubuntu EC2 setup with Nginx, HTTPS, PostgreSQL, Redis, and
+systemd, see [Deploy to AWS EC2](docs/aws-deployment.md).
+
 - `GET /health` checks whether the process is responding.
 - `GET /ready` checks PostgreSQL and Redis; Redis failure returns HTTP 503 and a
   degraded state. Local socket presence and persisted chat can continue while Redis
