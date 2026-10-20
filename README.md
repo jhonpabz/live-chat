@@ -22,6 +22,10 @@ implemented features and remaining extensions.
 
 ## Local setup
 
+For a new PC, follow [Clone and install locally](docs/local-installation.md) for
+required applications and versions, Windows setup, PostgreSQL/Redis, agent
+creation, and verification commands.
+
 Use npm in each package. Development was verified with Node.js 24. PostgreSQL and
 Redis must be available locally; PostgreSQL is the durable source of truth.
 
@@ -44,7 +48,7 @@ Redis must be available locally; PostgreSQL is the durable source of truth.
    The backend checks for the new
    column before accepting traffic; it does not run migrations automatically.
 
-2. In `backend`, run `npm install`, copy `.env.example` to `.env`, and set:
+2. In `backend`, run `npm ci`, copy `.env.example` to `.env`, and set:
 
    - `DATABASE_URL`: PostgreSQL connection URL.
    - `REDIS_URL`: Redis connection URL.
@@ -70,7 +74,7 @@ Redis must be available locally; PostgreSQL is the durable source of truth.
    ```
 
 4. Start the backend with `npm run dev` or `npm start` from `backend`.
-5. In `frontend`, run `npm install` and `npm run dev`.
+5. In `frontend`, run `npm ci` and `npm run dev`.
 6. Open `http://localhost:5173/login` for the agent inbox or
    `http://localhost:5173/widget` for the visitor widget.
 
