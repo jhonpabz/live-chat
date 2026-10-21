@@ -30,4 +30,21 @@ function page(value = {}) {
   return { limit, after: data.after === undefined ? null : uuid(data.after, 'after'), before: data.before === undefined ? null : uuid(data.before, 'before') };
 }
 
-module.exports = { object, text, uuid, page };
+function email(value) {
+  const normalized = text(value, 'email', 255).trim().toLowerCase();
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalized)) throw new AppError(400, 'INVALID_INPUT', 'Enter a valid email address.');
+  return normalized;
+}
+
+function password(value) {
+  const result = text(value, 'password', 200);
+  if (result.length < 12 || Buffer.byteLength(result, 'utf8') > 72) throw new AppError(400, 'INVALID_INPUT', 'Use a password with at least 12 characters and at most 72 UTF-8 bytes.');
+  return result;
+}
+
+function capacity(value = 5) {
+  if (!Number.isInteger(value) || value < 1 || value > 100) throw new AppError(400, 'INVALID_INPUT', 'Capacity must be an integer from 1 to 100.');
+  return value;
+}
+
+module.exports = { object, text, uuid, page, email, password, capacity };

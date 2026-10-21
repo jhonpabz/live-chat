@@ -15,13 +15,13 @@ function createAuth(pool, secret) {
 
   async function agent(token) {
     const claims = verify(token);
-    // Existing agent tokens have no role claim; visitor tokens always do.
-    if (claims.role && claims.role !== 'agent') throw new AppError(401, 'UNAUTHORIZED', 'Agent authentication required.');
+    if (!['agent', 'super_admin'].includes(claims.role) || !Number.isInteger(claims.version)) throw new AppError(401, 'UNAUTHORIZED', 'Please sign in again.');
     try { uuid(claims.id, 'agent id'); }
     catch { throw new AppError(401, 'UNAUTHORIZED', 'Agent authentication required.'); }
-    const result = await pool.query('SELECT id FROM agents WHERE id = $1', [claims.id]);
-    if (!result.rows.length) throw new AppError(401, 'UNAUTHORIZED', 'Agent account is unavailable.');
-    return { role: 'agent', id: claims.id, exp: claims.exp };
+    const result = await pool.query('SELECT id, role, is_active, session_version, setup_token_hash FROM agents WHERE id = $1', [claims.id]);
+    const account = result.rows[0];
+    if (!account?.is_active || account.setup_token_hash || account.session_version !== claims.version || account.role !== claims.role) throw new AppError(401, 'UNAUTHORIZED', 'Account or session is unavailable. Please sign in again.');
+    return { role: account.role, id: account.id, version: account.session_version, exp: claims.exp };
   }
 
   function visitor(token) {
@@ -33,7 +33,7 @@ function createAuth(pool, secret) {
 
   return {
     agent, visitor,
-    agentToken: user => jwt.sign({ id: user.id, email: user.email, name: user.name, role: 'agent' }, secret, { expiresIn: '7d' }),
+    agentToken: user => jwt.sign({ id: user.id, role: user.role, version: user.session_version }, secret, { expiresIn: '7d' }),
     visitorToken: id => jwt.sign({ id, role: 'visitor' }, secret, { expiresIn: '30d' })
   };
 }

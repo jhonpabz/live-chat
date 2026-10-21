@@ -31,6 +31,10 @@ class Presence {
     return { online: [...this.connections.values()].some(value => value.role === 'agent' && value.status === 'online') };
   }
 
+  isOnline(agentId) {
+    return [...this.connections.values()].some(value => value.role === 'agent' && value.id === agentId && value.status === 'online');
+  }
+
   onlineVisitors(visitorIds) {
     const online = new Set([...this.connections.values()].filter(value => value.role === 'visitor').map(value => value.id));
     return visitorIds.filter(id => online.has(id));

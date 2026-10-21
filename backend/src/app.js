@@ -1,11 +1,10 @@
 const express = require('express');
 const cors = require('cors');
-const bcrypt = require('bcryptjs');
 const { AppError, publicError, logError } = require('./errors');
-const { object, text, page } = require('./validation');
+const { page } = require('./validation');
 const { createRateLimit } = require('./rate-limit');
 
-function createApp({ pool, redisClient, auth, chat, io, origins }) {
+function createApp({ pool, redisClient, auth, chat, accounts, events, origins }) {
   const app = express();
   app.disable('x-powered-by');
   app.use(cors({ origin: origins }));
@@ -14,6 +13,7 @@ function createApp({ pool, redisClient, auth, chat, io, origins }) {
   const loginLimit = createRateLimit({ limit: 20, windowMs: 15 * 60000 });
   const route = handler => (req, res, next) => Promise.resolve().then(() => handler(req, res)).catch(next);
   app.use('/api', (req, _res, next) => {
+    _res.set('Cache-Control', 'no-store');
     try { requestLimit(req.ip); next(); } catch (error) { next(error); }
   });
   const protectedRoute = handler => route(async (req, res) => {
@@ -25,22 +25,43 @@ function createApp({ pool, redisClient, auth, chat, io, origins }) {
 
   app.post('/api/auth/login', route(async (req, res) => {
     loginLimit(req.ip);
-    const input = object(req.body);
-    const email = text(input.email, 'email', 255).trim();
-    const password = text(input.password, 'password', 200);
-    const result = await pool.query('SELECT id, name, email, password_hash FROM agents WHERE email = $1', [email]);
-    const agent = result.rows[0];
-    const valid = await bcrypt.compare(password, agent?.password_hash || '$2a$10$N9qo8uLOickgx2ZMRZoMyeIjZAgcfl7p92ldGxad68LJZdL17lhWy');
-    if (!agent || !valid) throw new AppError(401, 'INVALID_CREDENTIALS', 'Invalid email or password.');
-    res.json({ token: auth.agentToken(agent), agent: { id: agent.id, name: agent.name, email: agent.email } });
+    res.set('Cache-Control', 'no-store').json(await accounts.login(req.body));
+  }));
+  app.post('/api/auth/set-password', route(async (req, res) => {
+    loginLimit(req.ip);
+    const id = await accounts.completeSetup(req.body);
+    events.revoke(id);
+    res.set('Cache-Control', 'no-store').json({ success: true });
+  }));
+  app.get('/api/auth/me', protectedRoute(async (req, res) => res.json(await accounts.me(req.identity))));
+  app.get('/api/agents', protectedRoute(async (req, res) => res.json(await accounts.list(req.identity, req.query))));
+  app.post('/api/agents', protectedRoute(async (req, res) => {
+    res.status(201).set('Cache-Control', 'no-store').json(await accounts.create(req.identity, req.body));
+  }));
+  app.patch('/api/agents/:id', protectedRoute(async (req, res) => res.json(await accounts.edit(req.identity, req.params.id, req.body))));
+  app.post('/api/agents/:id/status', protectedRoute(async (req, res) => {
+    const agent = await accounts.setActive(req.identity, req.params.id, req.body);
+    events.revoke(agent.id);
+    events.changed();
+    res.json(agent);
+  }));
+  app.post('/api/agents/:id/reset-password', protectedRoute(async (req, res) => {
+    const result = await accounts.reset(req.identity, req.params.id);
+    events.revoke(req.params.id);
+    res.set('Cache-Control', 'no-store').json(result);
   }));
 
-  app.get('/api/conversations', protectedRoute(async (req, res) => res.json(await chat.list(req.query))));
+  app.get('/api/conversations', protectedRoute(async (req, res) => res.json(await chat.list(req.identity, req.query))));
+  app.post('/api/conversations/:id/accept', protectedRoute(async (req, res) => {
+    const result = await chat.accept(req.identity, req.params.id);
+    events.changed();
+    res.json(result);
+  }));
   app.get('/api/conversations/:id/messages', protectedRoute(async (req, res) => res.json(await chat.history(req.identity, req.params.id, req.query))));
   app.post('/api/conversations/:id/resolve', protectedRoute(async (req, res) => {
     await chat.resolve(req.identity, req.params.id);
-    io.to(`conversation:${req.params.id}`).to('agents').emit('conversation_resolved', { id: req.params.id });
-    io.to('agents').emit('conversation_update', { conversationId: req.params.id });
+    await events.publish(req.params.id, 'conversation_resolved', { id: req.params.id });
+    events.changed();
     res.json({ success: true });
   }));
   app.get('/api/quick-replies', protectedRoute(async (req, res) => {

@@ -1,10 +1,8 @@
 const { AppError, publicError, logError } = require('./errors');
 const { object, uuid } = require('./validation');
 const { createRateLimit } = require('./rate-limit');
-const { Presence } = require('./presence');
 
-function registerRealtime({ io, auth, chat, redisClient }) {
-  const presence = new Presence();
+function registerRealtime({ io, auth, chat, redisClient, presence, events }) {
   const handshakeLimit = createRateLimit({ limit: 60, windowMs: 60000 });
   const eventLimit = createRateLimit({ limit: 180, windowMs: 60000 });
   const broadcastAvailability = () => io.emit('support_availability', presence.availability());
@@ -66,7 +64,7 @@ function registerRealtime({ io, auth, chat, redisClient }) {
         const identity = socket.data.identity;
         eventLimit(identity ? `${identity.role}:${identity.id}` : socket.handshake.address);
         if (identity && identity.exp * 1000 <= Date.now()) throw new AppError(401, 'UNAUTHORIZED', 'Your session has expired.');
-        if (identity?.role === 'agent') await auth.agent(socket.handshake.auth.token);
+        if (identity && identity.role !== 'visitor') socket.data.identity = await auth.agent(socket.handshake.auth.token);
         next();
       } catch (error) {
         const acknowledge = packet[packet.length - 1];
@@ -96,8 +94,8 @@ function registerRealtime({ io, auth, chat, redisClient }) {
 
     socket.emit('support_availability', presence.availability());
     socket.emit('service_state', { redis: redisClient.isReady });
-    if (socket.data.identity?.role === 'agent') {
-      socket.join('agents');
+    if (socket.data.identity && socket.data.identity.role !== 'visitor') {
+      socket.join('staff');
       const status = presence.connect(socket.id, socket.data.identity, socket.handshake.auth.status);
       socket.emit('agent_status_current', status);
       broadcastAvailability();
@@ -113,19 +111,19 @@ function registerRealtime({ io, auth, chat, redisClient }) {
       return { status };
     });
 
-    handle('visitor_presence', payload => {
-      if (socket.data.identity?.role !== 'agent') throw new AppError(403, 'FORBIDDEN', 'Agent access required.');
+    handle('visitor_presence', async payload => {
+      if (!['agent', 'super_admin'].includes(socket.data.identity?.role)) throw new AppError(403, 'FORBIDDEN', 'Staff access required.');
       const input = object(payload);
       if (!Array.isArray(input.visitorIds) || input.visitorIds.length > 100) {
         throw new AppError(400, 'INVALID_INPUT', 'Request at most 100 visitor IDs.');
       }
       const visitorIds = [...new Set(input.visitorIds.map(id => uuid(id, 'visitorId')))];
-      return { onlineVisitorIds: presence.onlineVisitors(visitorIds) };
+      return { onlineVisitorIds: presence.onlineVisitors(await chat.visibleVisitors(socket.data.identity, visitorIds)) };
     });
 
     handle('visitor_join', async payload => {
       object(payload);
-      if (socket.data.identity?.role === 'agent') throw new AppError(403, 'FORBIDDEN', 'Use the agent inbox.');
+      if (socket.data.identity && socket.data.identity.role !== 'visitor') throw new AppError(403, 'FORBIDDEN', 'Use the staff inbox.');
       if (joining) throw new AppError(409, 'JOIN_IN_PROGRESS', 'Chat is already connecting.');
       joining = true;
       try {
@@ -137,8 +135,8 @@ function registerRealtime({ io, auth, chat, redisClient }) {
         socket.join(`conversation:${joined.conversationId}`);
         presence.connect(socket.id, socket.data.identity);
         scheduleExpiry();
-        io.to('agents').emit('visitor_online', { visitorId: joined.visitorId });
-        io.to('agents').emit('conversation_update', { conversationId: joined.conversationId });
+        events.presenceChanged();
+        events.changed();
         const data = { conversationId: joined.conversationId, visitorToken };
         socket.emit('conversation_ready', data);
         return data;
@@ -154,8 +152,8 @@ function registerRealtime({ io, auth, chat, redisClient }) {
 
     handle('send_message', async payload => {
       const result = await chat.send(socket.data.identity, payload);
-      for (const message of result.messages) io.to(`conversation:${message.conversation_id}`).to('agents').emit('new_message', message);
-      io.to('agents').emit('conversation_update', { conversationId: result.message.conversation_id });
+      for (const message of result.messages) await events.publish(message.conversation_id, 'new_message', message);
+      events.changed();
       return result.message;
     });
 
@@ -167,7 +165,7 @@ function registerRealtime({ io, auth, chat, redisClient }) {
       await chat.authorize(socket.data.identity, conversationId);
       if (Date.now() - lastTypingAt < 500) return {};
       lastTypingAt = Date.now();
-      socket.to(`conversation:${conversationId}`).to('agents').emit('typing', { conversationId, isTyping: input.isTyping, isAgent: socket.data.identity.role === 'agent' });
+      await events.publish(conversationId, 'typing', { conversationId, isTyping: input.isTyping, isAgent: socket.data.identity.role !== 'visitor' }, socket.id);
       return {};
     });
 
@@ -175,7 +173,7 @@ function registerRealtime({ io, auth, chat, redisClient }) {
       clearTimeout(expiryTimer);
       const disconnected = presence.disconnect(socket.id);
       broadcastAvailability();
-      if (disconnected?.role === 'visitor') io.to('agents').emit('visitor_offline', { visitorId: disconnected.id });
+      if (disconnected?.role === 'visitor') events.presenceChanged();
       if (redisClient.isReady) redisClient.del(`livechat:presence:${socket.id}`).catch(logError);
     });
   });

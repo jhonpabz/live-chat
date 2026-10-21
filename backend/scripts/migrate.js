@@ -1,5 +1,5 @@
 require('dotenv').config({ path: require('node:path').join(__dirname, '..', '.env') });
-const { readFileSync } = require('node:fs');
+const { readFileSync, readdirSync } = require('node:fs');
 const { join } = require('node:path');
 const { Client } = require('pg');
 
@@ -14,8 +14,10 @@ async function migrate() {
     await client.connect();
     // Serialize explicit migration commands; the SQL itself is safe to rerun.
     await client.query('SELECT pg_advisory_lock(180017, 1)');
-    await client.query(readFileSync(join(__dirname, '..', 'migrations', '001_message_idempotency.sql'), 'utf8'));
-    console.log('Applied 001_message_idempotency.sql. Existing messages and conversations were preserved.');
+    for (const file of readdirSync(join(__dirname, '..', 'migrations')).filter(file => /^\d+_.+\.sql$/.test(file)).sort()) {
+      await client.query(readFileSync(join(__dirname, '..', 'migrations', file), 'utf8'));
+      console.log(`Applied ${file}.`);
+    }
   } finally {
     await client.end();
   }

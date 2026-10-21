@@ -10,6 +10,10 @@ const { createChatService } = require('./src/chat.service');
 const { createApp } = require('./src/app');
 const { registerRealtime } = require('./src/realtime');
 const { logError } = require('./src/errors');
+const { Presence } = require('./src/presence');
+const { createChatEvents } = require('./src/chat.events');
+const { createAccountsRepository } = require('./src/accounts.repository');
+const { createAccountsService } = require('./src/accounts.service');
 
 async function start() {
   const config = loadConfig();
@@ -29,9 +33,12 @@ async function start() {
     allowRequest: (req, callback) => callback(null, !req.headers.origin || config.origins.includes(req.headers.origin))
   });
   const auth = createAuth(pool, config.jwtSecret);
-  const chat = createChatService(createChatRepository(pool));
-  const app = createApp({ pool, redisClient, auth, chat, io, origins: config.origins });
-  const stopPresence = registerRealtime({ io, auth, chat, redisClient });
+  const presence = new Presence();
+  const chat = createChatService(createChatRepository(pool), presence);
+  const accounts = createAccountsService(createAccountsRepository(pool), auth);
+  const events = createChatEvents(io, auth, chat);
+  const app = createApp({ pool, redisClient, auth, chat, accounts, events, origins: config.origins });
+  const stopPresence = registerRealtime({ io, auth, chat, redisClient, presence, events });
   let stopping = false;
   async function shutdown() {
     if (stopping) return;
@@ -48,6 +55,8 @@ async function start() {
   process.once('SIGINT', () => shutdown().catch(logError));
   try {
     await pool.query('SELECT client_message_id FROM messages LIMIT 0');
+    await pool.query('SELECT role, session_version, setup_token_hash, capacity FROM agents LIMIT 0');
+    await pool.query('SELECT id FROM conversation_assignments LIMIT 0');
     redisClient.connect().catch(logError);
     await new Promise((resolve, reject) => {
       server.once('error', reject);
@@ -56,7 +65,7 @@ async function start() {
     console.log(JSON.stringify({ event: 'server_started', port: config.port }));
   } catch (error) {
     await shutdown();
-    if (error.code === '42703') throw new Error('Run npm run db:migrate from the backend directory before starting the server.');
+    if (['42703', '42P01'].includes(error.code)) throw new Error('Run npm run db:migrate from the backend directory before starting the server.');
     throw error;
   }
 }

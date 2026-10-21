@@ -6,8 +6,9 @@ const { randomUUID } = require('node:crypto');
 const { Pool } = require('pg');
 const { createChatRepository } = require('../src/chat.repository');
 const { createChatService } = require('../src/chat.service');
+const { ownershipCases } = require('./helpers/ownership-cases');
 
-test('isolated PostgreSQL: migration, concurrent retries, transaction rollback, ownership, and history cursors', { timeout: 20000 }, async t => {
+test('isolated PostgreSQL: migration, concurrent retries, transaction rollback, ownership, and history cursors', { timeout: 60000 }, async t => {
   const connectionString = process.env.LIVECHAT_ISOLATED_DATABASE_URL;
   assert.ok(connectionString && /^\/livechat_test_[0-9a-f]{16}$/.test(new URL(connectionString).pathname), 'Run through npm run test:postgres to create a disposable test database.');
   const pool = new Pool({ connectionString, max: 5, connectionTimeoutMillis: 5000, options: '-c timezone=UTC' });
@@ -16,11 +17,16 @@ test('isolated PostgreSQL: migration, concurrent retries, transaction rollback, 
   const migration = readFileSync(join(__dirname, '..', 'migrations', '001_message_idempotency.sql'), 'utf8');
   await pool.query(migration);
   await pool.query(migration);
+  const ownershipMigration = readFileSync(join(__dirname, '..', 'migrations', '002_agent_ownership.sql'), 'utf8');
+  await pool.query(ownershipMigration);
+  await pool.query(ownershipMigration);
   const repository = createChatRepository(pool);
   const chat = createChatService(repository);
   const joined = await chat.joinVisitor(null, '127.0.0.1');
   const visitor = { role: 'visitor', id: joined.visitorId };
-  const listed = await chat.list({});
+  const account = (await pool.query("INSERT INTO agents (name, email, password_hash, role) VALUES ('Test supervisor', 'supervisor@example.com', 'unused', 'super_admin') RETURNING id")).rows[0];
+  const admin = { id: account.id, role: 'super_admin', version: 0 };
+  const listed = await chat.list(admin, {});
   assert.equal(listed.conversations[0].visitor_identity_id, joined.visitorId);
   const payload = { conversationId: joined.conversationId, clientMessageId: randomUUID(), content: 'help' };
   await pool.query("INSERT INTO knowledge_base (keyword, response) VALUES ('help', 'Reply')");
@@ -49,8 +55,9 @@ test('isolated PostgreSQL: migration, concurrent retries, transaction rollback, 
   const tiedOlder = await chat.history(visitor, payload.conversationId, { before: tied.messages[0].id, limit: 1 });
   assert.notEqual(tied.messages[0].id, tiedOlder.messages[0].id);
   assert.equal(tiedOlder.hasMore, false);
-  const agent = await pool.query("INSERT INTO agents (name, email, password_hash) VALUES ('Test', 'test@example.com', 'unused') RETURNING id");
-  await chat.resolve({ role: 'agent', id: agent.rows[0].id }, payload.conversationId);
+  await chat.resolve(admin, payload.conversationId);
   assert.equal((await chat.send(visitor, payload)).message.id, first.message.id);
   await assert.rejects(chat.send(visitor, { ...payload, clientMessageId: randomUUID() }), { code: 'CONVERSATION_RESOLVED' });
+  await pool.query('DELETE FROM agents WHERE id = $1', [admin.id]);
+  await ownershipCases(t, pool);
 });

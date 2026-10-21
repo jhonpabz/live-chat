@@ -6,10 +6,15 @@ function memoryRepository() {
   const visitors = new Set();
   const conversations = new Map();
   const messages = [];
+  const agents = new Map();
   let queue = Promise.resolve();
   let sequence = 0;
   const repository = {
-    visitors, conversations, messages, failWrites: false,
+    visitors, conversations, messages, agents, failWrites: false,
+    async staff(id) { return agents.get(id); },
+    async workload(_client, id) { return [...conversations.values()].filter(row => row.agent_id === id && row.status === 'open').length; },
+    async assign(_client, id, agentId) { conversations.get(id).agent_id = agentId; },
+    async visibleVisitors(context, ids) { return ids.filter(id => [...conversations.values()].some(row => row.visitor_id === id && (context.role === 'super_admin' || row.agent_id === context.id || (!row.agent_id && row.status === 'open')))); },
     transaction(work) {
       const transaction = queue.then(async () => {
         const snapshot = { visitors: new Set(visitors), conversations: new Map([...conversations].map(([id, value]) => [id, { ...value }])), messages: [...messages] };
@@ -30,7 +35,7 @@ function memoryRepository() {
       const current = [...conversations.values()].find(value => value.visitor_id === visitorId && value.status === 'open');
       if (current) return current.id;
       const id = randomUUID();
-      conversations.set(id, { id, visitor_id: visitorId, status: 'open', updated_at: new Date().toISOString() });
+      conversations.set(id, { id, visitor_id: visitorId, agent_id: null, status: 'open', updated_at: new Date().toISOString(), created_at: new Date().toISOString() });
       return id;
     },
     async conversation(id) { return conversations.get(id); },
@@ -54,7 +59,10 @@ function memoryRepository() {
       const selected = after ? all.slice(index + 1) : before ? all.slice(0, index) : all;
       return { messages: after ? selected.slice(0, limit) : selected.slice(-limit), hasMore: selected.length > limit };
     },
-    async list({ limit }) { return { conversations: [...conversations.values()].slice(0, limit), hasMore: conversations.size > limit }; }
+    async list(context, { limit, view }) {
+      const rows = [...conversations.values()].filter(row => view === 'all' || (view === 'queue' ? !row.agent_id && row.status === 'open' : row.agent_id === context.id));
+      return { conversations: rows.slice(0, limit), hasMore: rows.length > limit };
+    }
   };
   return repository;
 }

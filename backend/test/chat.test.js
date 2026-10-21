@@ -11,7 +11,9 @@ async function fixture() {
   const joined = await chat.joinVisitor(null, '127.0.0.1');
   const visitor = { role: 'visitor', id: joined.visitorId };
   const payload = { conversationId: joined.conversationId, clientMessageId: randomUUID(), content: 'hello' };
-  return { repository, chat, visitor, payload };
+  const admin = { id: randomUUID(), role: 'super_admin', version: 0 };
+  repository.agents.set(admin.id, { ...admin, is_active: true, session_version: 0 });
+  return { repository, chat, visitor, payload, admin };
 }
 
 test('visitor ownership is required for history, sends, and room authorization', async () => {
@@ -49,20 +51,20 @@ test('failed transaction does not report saved messages', async () => {
 });
 
 test('resolved chats reject new sends but still confirm already saved retries', async () => {
-  const { chat, visitor, payload } = await fixture();
+  const { chat, visitor, payload, admin } = await fixture();
   const saved = await chat.send(visitor, payload);
   await assert.rejects(chat.resolve(visitor, payload.conversationId), { code: 'FORBIDDEN' });
-  await chat.resolve({ role: 'agent', id: randomUUID() }, payload.conversationId);
+  await chat.resolve(admin, payload.conversationId);
   assert.equal((await chat.send(visitor, payload)).message.id, saved.message.id);
   await assert.rejects(chat.send(visitor, { ...payload, clientMessageId: randomUUID() }), { code: 'CONVERSATION_RESOLVED' });
 });
 
 test('rejoining reuses an open conversation and creates one after resolution', async () => {
-  const { chat, visitor, payload } = await fixture();
+  const { chat, visitor, payload, admin } = await fixture();
   const [first, second] = await Promise.all([chat.joinVisitor(visitor), chat.joinVisitor(visitor)]);
   assert.equal(first.conversationId, payload.conversationId);
   assert.equal(second.conversationId, first.conversationId);
-  await chat.resolve({ role: 'agent', id: randomUUID() }, first.conversationId);
+  await chat.resolve(admin, first.conversationId);
   assert.notEqual((await chat.joinVisitor(visitor)).conversationId, first.conversationId);
 });
 

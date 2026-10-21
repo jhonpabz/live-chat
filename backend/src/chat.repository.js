@@ -1,18 +1,21 @@
+const { transaction } = require('./database');
+
 function createChatRepository(pool) {
   return {
-    async transaction(work) {
-      const client = await pool.connect();
-      try {
-        await client.query('BEGIN');
-        const result = await work(client);
-        await client.query('COMMIT');
-        return result;
-      } catch (error) {
-        await client.query('ROLLBACK');
-        throw error;
-      } finally {
-        client.release();
-      }
+    transaction: work => transaction(pool, work),
+    async staff(id, client = pool, lock = false) {
+      return (await client.query(`SELECT id, role, is_active, capacity, session_version, setup_token_hash FROM agents WHERE id = $1${lock ? ' FOR UPDATE' : ''}`, [id])).rows[0];
+    },
+    async workload(client, id) {
+      return (await client.query("SELECT count(*)::int AS count FROM conversations WHERE agent_id = $1 AND status = 'open'", [id])).rows[0].count;
+    },
+    async assign(client, id, agentId) {
+      await client.query('UPDATE conversations SET agent_id = $2, updated_at = clock_timestamp() WHERE id = $1', [id, agentId]);
+      await client.query("INSERT INTO conversation_assignments (conversation_id, agent_id, action) VALUES ($1, $2, 'accepted')", [id, agentId]);
+    },
+    async visibleVisitors(context, ids) {
+      return (await pool.query(`SELECT DISTINCT visitor_id FROM conversations WHERE visitor_id = ANY($1::uuid[])
+        AND ($2 = 'super_admin' OR agent_id = $3 OR (agent_id IS NULL AND status = 'open'))`, [ids, context.role, context.id])).rows.map(row => row.visitor_id);
     },
     async createVisitor(client, visitorId, address) {
       const result = await client.query('INSERT INTO visitors (visitor_id, ip_address) VALUES ($1, $2) RETURNING id', [visitorId, address]);
@@ -29,16 +32,16 @@ function createChatRepository(pool) {
       return result.rows[0].id;
     },
     async conversation(id, client = pool, lock = false) {
-      const result = await client.query(`SELECT id, visitor_id, status FROM conversations WHERE id = $1${lock ? ' FOR UPDATE' : ''}`, [id]);
+      const result = await client.query(`SELECT id, visitor_id, status, agent_id FROM conversations WHERE id = $1${lock ? ' FOR UPDATE' : ''}`, [id]);
       return result.rows[0];
     },
-    async history(conversationId, { limit, after, before }) {
+    async history(conversationId, { limit, after, before }, client = pool) {
       const cursor = after || before;
       if (cursor) {
-        const result = await pool.query('SELECT id FROM messages WHERE id = $1 AND conversation_id = $2', [cursor, conversationId]);
+        const result = await client.query('SELECT id FROM messages WHERE id = $1 AND conversation_id = $2', [cursor, conversationId]);
         if (!result.rows.length) return null;
       }
-      const result = await pool.query(`
+      const result = await client.query(`
         SELECT id, conversation_id, sender_type, content, created_at, client_message_id
         FROM messages WHERE conversation_id = $1
         ${cursor ? `AND (created_at, id) ${after ? '>' : '<'} (SELECT created_at, id FROM messages WHERE id = $2 AND conversation_id = $1)` : ''}
@@ -49,15 +52,19 @@ function createChatRepository(pool) {
       if (!after) messages.reverse();
       return { messages, hasMore };
     },
-    async list({ limit, before }) {
-      const result = await pool.query(`
-        SELECT c.id, c.status, c.updated_at, v.visitor_id, v.id AS visitor_identity_id, v.ip_address, v.location,
-          (SELECT content FROM messages WHERE conversation_id = c.id ORDER BY created_at DESC, id DESC LIMIT 1) AS last_message
+    async list(context, { limit, before, view }, client = pool) {
+      const queue = view === 'queue';
+      const filter = queue ? "c.agent_id IS NULL AND c.status = 'open'" : view === 'mine' ? 'c.agent_id = $3' : 'TRUE';
+      const result = await client.query(`
+        SELECT c.id, c.status, c.created_at, c.updated_at, c.agent_id, a.name AS agent_name, v.visitor_id, v.id AS visitor_identity_id,
+          ${queue && context.role !== 'super_admin' ? 'NULL::text AS ip_address, NULL::text AS location, NULL::text AS last_message' : `v.ip_address, v.location,
+          (SELECT content FROM messages WHERE conversation_id = c.id ORDER BY created_at DESC, id DESC LIMIT 1) AS last_message`}
         FROM conversations c JOIN visitors v ON c.visitor_id = v.id
-        WHERE (c.status != 'resolved' OR c.updated_at > NOW() - INTERVAL '7 days')
-        ${before ? 'AND (c.updated_at, c.id) < (SELECT updated_at, id FROM conversations WHERE id = $2)' : ''}
-        ORDER BY c.updated_at DESC, c.id DESC LIMIT $1
-      `, before ? [limit + 1, before] : [limit + 1]);
+        LEFT JOIN agents a ON a.id = c.agent_id
+        WHERE ${filter} AND ($3::uuid IS NOT NULL)
+        AND ($2::uuid IS NULL OR (c.created_at, c.id) < (SELECT created_at, id FROM conversations WHERE id = $2))
+        ORDER BY c.created_at DESC, c.id DESC LIMIT $1
+      `, [limit + 1, before, context.id]);
       return { conversations: result.rows.slice(0, limit), hasMore: result.rows.length > limit };
     },
     async insertMessage(client, data) {
