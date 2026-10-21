@@ -1,14 +1,15 @@
 # HTTP and socket contracts
 
-The application has one shared agent inbox. Every authenticated, existing agent
-can access all conversations; there are no tenants or assignment restrictions.
-Visitors may access only conversations owned by the visitor ID in their signed
-credential. IDs or sender roles supplied in event payloads grant no access.
+Agents access only their assigned conversations. Super admins have explicit
+oversight across all conversations; visitors access only their own signed
+identity's history. Queued conversations expose limited metadata to agents.
+See [Priority 1 contracts and setup](agent-ownership.md) for account management,
+capacity, acceptance, and lifecycle endpoints.
 
 ## Authentication
 
 `POST /api/auth/login` accepts `{ email, password }` and returns
-`{ token, agent: { id, name, email } }`. Protected HTTP endpoints require
+`{ token, agent: { id, name, email, role, is_active, capacity, active_chats, pending_setup } }`. Protected HTTP endpoints require
 `Authorization: Bearer <token>`. Errors use
 `{ error: { code, message } }` with an appropriate HTTP status.
 
@@ -17,10 +18,11 @@ Visitor handshakes use `auth: { visitorToken? }`. An invalid supplied credential
 rejects the connection rather than downgrading it to an anonymous visitor.
 Anonymous connections may create a visitor session through `visitor_join`.
 
-Agent account existence and token expiration are checked on each incoming event.
-Expiration also disconnects idle authenticated sockets. Tokens currently have no
-individual revocation list; deleting an agent blocks its next operation, and
-rotating the JWT secret invalidates all sessions on subsequent verification.
+Staff role, active state, setup status, session version, and token expiration are
+checked against PostgreSQL on each incoming event. Password resets and account
+deactivation increment the session version and disconnect all account sockets.
+Expiration also disconnects idle sockets. Legacy unversioned staff tokens require
+a fresh login. Rotating the JWT secret invalidates all signed sessions.
 
 ## Message representation
 
@@ -56,31 +58,29 @@ Supported request events:
   is rejected. Resolved conversations reject new sends.
 - `agent_status`: `'online' | 'offline'`. Agent-only. Returns `{ status }` and
   synchronizes every live connection for that agent through `agent_status_current`.
-- `visitor_presence`: `{ visitorIds: string[] }`. Agent-only snapshot for up to 100
+- `visitor_presence`: `{ visitorIds: string[] }`. Staff-only snapshot for up to 100
   visitor database UUIDs. Returns `{ onlineVisitorIds: string[] }`; requested IDs
   absent from the result are offline. Used when loading conversations and after
-  reconnect. The dashboard applies live transitions received during a snapshot
-  ahead of that snapshot, preventing stale online/offline indicators.
+  reconnect. A presence invalidation cancels the in-flight snapshot and fetches
+  a new one, preventing stale responses from overwriting the current state.
 - `typing`: `{ conversationId, isTyping }`. Requires conversation access; broadcasts
   are throttled to one per 500 ms per socket. Returns `{}`. UI integration is pending.
 
 Server events:
 
-- `new_message`: a saved public message, delivered to the conversation's visitors
-  and authenticated agents. Socket.IO's room union avoids duplicate delivery when
-  a socket belongs to more than one target room.
-- `conversation_update`: `{ conversationId }`; tells agents to refresh the list.
-- `conversation_resolved`: `{ id }`; delivered after resolution commits.
+- `new_message`: a saved public message delivered to the conversation's visitors,
+  its authorized owner, and super admins. Staff recipients are reauthorized at
+  delivery and do not join visitor rooms.
+- `conversation_update`: `{}`; tells staff to refresh their scoped lists without
+  revealing unrelated conversation IDs.
+- `conversation_resolved`: `{ id }`; delivered to authorized recipients after resolution commits.
 - `conversation_ready`: `{ conversationId, visitorToken }`.
 - `support_availability`: `{ online }`; initial snapshot and connection/status changes.
 - `agent_status_current`: `'online' | 'offline'` for the connected agent.
-- `visitor_online` / `visitor_offline`: `{ visitorId }` to agents. Offline is emitted
-  only when the visitor's last socket disconnects. IDs are database UUIDs matching
-  `visitor_identity_id` in agent conversation responses, not the public `visitor_id`
-  label. Visitors are online once joined, even if their widget is minimized. Abrupt
-  network loss is detected by Socket.IO heartbeat timeout. Redis leases continue
-  to renew/expire as documented in the README; the live snapshot uses this backend's
-  active sockets and remains available if the Redis cache is degraded.
+- `presence_changed`: no payload; invalidates visitor presence snapshots.
+  `visitor_presence` returns only requested IDs visible to this staff account
+  through owned/queued conversations or super-admin oversight. Multiple tabs
+  keep a visitor online until the final connection leaves.
 - `service_state`: `{ redis }`; reports degraded presence caching.
 - `session_expired`: emitted before a socket is disconnected for expiry.
 - `request_error`: `{ code, message }`; also used when a request has no callback.
@@ -104,11 +104,12 @@ manual history reconciliation recovers messages committed before a process failu
 ## HTTP pagination
 
 - `GET /api/conversations?limit=50&before=<conversationId>` returns
-  `{ conversations, hasMore }`, ordered by `(updated_at, id)` descending.
+  `{ conversations, hasMore }`, ordered by `(created_at, id)` descending. Use `view=mine`, `view=queue`, or
+  super-admin-only `view=all`.
   Rows include `visitor_identity_id`, the database UUID used for presence lookup,
   alongside the existing public `visitor_id` label.
-  Active conversations can move between pages as new messages arrive; the UI
-  deduplicates pages and refreshes the newest page on updates.
+  Creation-time cursors remain stable when messages arrive. Queue rows for agents
+  redact last_message, ip_address, and location; claimed chats require ownership.
 - `GET /api/conversations/:id/messages` accepts the same history query fields as
   `message_history` and returns the same page shape.
 - `POST /api/conversations/:id/resolve` returns `{ success: true }` after commit.

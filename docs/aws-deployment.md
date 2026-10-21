@@ -39,7 +39,7 @@ This matches the repository:
 
 **Current limitations:** use exactly one backend process. Do not enable PM2
 cluster mode or multiple EC2 application instances with this code. Agent inbox
-access is shared across all agents; exclusive assignment is not implemented.
+access is restricted to owned chats, with explicit super-admin oversight.
 See [HTTP and socket contracts](realtime.md) for the current behavior.
 
 ## 1. Prepare your AWS account and domain
@@ -224,8 +224,8 @@ encoding. The final command prompts for that same database password.
 
 Run `schema.sql` only for a **new empty database**. For an existing installation,
 back up first and use `npm run db:migrate` from `backend` after configuring its
-environment. The current migration adds message idempotency and pagination
-indexes; it does not create the initial tables.
+environment. The migrations add message idempotency, pagination indexes, roles, and ownership
+support; they do not create the initial base tables.
 
 Verify local services:
 
@@ -289,40 +289,31 @@ umask 022
 The backend loads this exact `.env` path through `dotenv`. Do not publish it in
 the frontend's static directory.
 
-## 8. Create your first agent account
+## 8. Provision your first super admin
 
-There is no default account or registration page. First generate a bcrypt hash
-without placing the plaintext password in shell history or command arguments:
+There are no default credentials. On EC2:
 
 ```bash
 cd /srv/live-chat/backend
-read -rsp 'New agent password: ' agent_password
-printf '\n'
-printf '%s' "$agent_password" | node -e \
-  "const fs = require('node:fs'); const bcrypt = require('bcryptjs'); console.log(bcrypt.hashSync(fs.readFileSync(0, 'utf8'), 12));"
-unset agent_password
+npm run admin:bootstrap -- --name "Support Owner" --email "owner@example.com"
 ```
 
-Save the resulting bcrypt hash for the next prompt. Then open PostgreSQL:
+Use your real name and a unique email. Keep the printed setup path private.
+Complete steps 9-12, then open the printed `/set-password#token=...` path on
+`https://chat.example.com`, choose a password, and log in. The link expires in
+24 hours and is consumed once. The super-admin CLI is the only initial
+provisioning entry point; it refuses to create another super admin.
+
+If the link expires before initial password setup, reissue it on the server:
 
 ```bash
-psql -h 127.0.0.1 -U livechat -d livechat -W
+npm run admin:bootstrap -- --reissue --email "owner@example.com"
 ```
 
-Inside `psql`, run:
-
-```sql
-\prompt 'Agent name: ' agent_name
-\prompt 'Agent email: ' agent_email
-\prompt 'Paste bcrypt hash: ' agent_hash
-INSERT INTO agents (name, email, password_hash)
-VALUES (:'agent_name', :'agent_email', :'agent_hash');
-\q
-```
-
-Use the email exactly as entered when logging in; the current login query does
-not normalize email case. All agents can access the shared inbox. An account
-created here is not a separate super-admin role.
+In **Manage agents**, invite agents and deliver their password-setup links through
+a private channel. Each agent has configurable capacity (default five active
+chats). Agents accept from the waiting queue; only the owner and super admin
+can read/reply/resolve. See [Priority 1 setup](agent-ownership.md).
 
 ## 9. Verify the packages and build the frontend
 
@@ -579,11 +570,13 @@ JSON payload. It checks the polling route, not full message delivery.
 
 **In your browser:**
 
-1. Visit `https://chat.example.com/login` and sign in with your agent account.
+1. Complete the super-admin setup, create an agent invitation, and set that
+   agent's password. Visit `https://chat.example.com/login` and sign in as the agent.
 2. Open `https://chat.example.com/widget` in an incognito window so it has a
    separate visitor session.
 3. Confirm agent availability and visitor presence update.
-4. Send a visitor message and reply from the agent dashboard.
+4. Send a visitor message. In the agent dashboard, select **Waiting Queue**,
+   choose **Accept Chat**, then open it in **My Chats** and reply.
 5. Refresh both windows and confirm saved history returns.
 6. Open two visitor tabs in the same visitor session. Close one and confirm the
    remaining tab keeps that visitor online.

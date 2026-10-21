@@ -59,19 +59,18 @@ Redis must be available locally; PostgreSQL is the durable source of truth.
      slashes. Defaults to local Vite origins in development; required in production.
    - `PORT`: defaults to `3001`.
 
-3. Create an agent using a bcrypt password hash. There are no preconfigured accounts.
-   Generate a hash from the backend directory:
+3. Provision the first super admin from the backend directory:
 
    ```sh
-   node -e "console.log(require('bcryptjs').hashSync('replace-with-your-password', 12))"
+   npm run admin:bootstrap -- --name "Support Owner" --email "owner@example.com"
    ```
 
-   Insert your agent through your PostgreSQL client, replacing the values:
-
-   ```sql
-   INSERT INTO agents (name, email, password_hash)
-   VALUES ('Support Agent', 'agent@example.com', 'replace-with-generated-hash');
-   ```
+   The command prints a private, single-use `/set-password#token=...` path.
+   After starting the frontend/backend, open that path on the frontend host,
+   choose a password, and sign in. Open **Manage agents** to create invitations,
+   edit capacity, deactivate/reactivate agents, and issue password resets.
+   There are no default credentials or public registration endpoints.
+   See [Priority 1 setup and permissions](docs/agent-ownership.md).
 
 4. Start the backend with `npm run dev` or `npm start` from `backend`.
 5. In `frontend`, run `npm ci` and `npm run dev`.
@@ -85,9 +84,13 @@ The backend binds to `0.0.0.0` and respects `PORT`.
 
 ## Upgrading from the initial version
 
-Apply migration `001_message_idempotency.sql`, check `.env` against the example,
+Run `npm run db:migrate` in `backend` to apply both versioned migrations, check `.env` against the example,
 and restart the backend and frontend together. Message acknowledgements and
-paginated responses require matching client/server versions.
+paginated responses require matching client/server versions. Migration 002 adds
+roles, account lifecycle, configurable capacity, and assignment history. Existing
+accounts remain agents; existing staff tokens require a fresh login. Provision a
+new super admin through the CLI. Duplicate normalized emails must be resolved
+before migration; no accounts or messages are silently merged or removed.
 
 Old client-generated `visitorId` values cannot prove ownership and are deliberately
 not accepted as credentials. Existing messages remain available to agents. Visitors

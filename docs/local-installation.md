@@ -239,44 +239,33 @@ The generated JWT secret must be at least 32 characters; use a fresh secret for
 this installation. Keep `.env` private; Git ignores it. No frontend `.env` or
 `VITE_API_URL` is needed: Vite forwards `/api` and `/socket.io` to port 3001.
 
-## 7. Create an agent login
+## 7. Provision the first super admin
 
-There are no default login credentials or public registration page.
-Generate a bcrypt hash from a password prompt:
-
-```powershell
-Push-Location .\backend
-$agentPassword = Read-Host "Choose the agent login password" -AsSecureString
-try {
-    [System.Net.NetworkCredential]::new("", $agentPassword).Password | node -e "const fs=require('node:fs'); const bcrypt=require('bcryptjs'); const password=fs.readFileSync(0,'utf8').replace(/\r?\n$/, ''); console.log(bcrypt.hashSync(password,12));"
-} finally {
-    Remove-Variable agentPassword -ErrorAction SilentlyContinue
-    Pop-Location
-}
-```
-
-For this Windows PowerShell pipeline, use an ASCII password or passphrase:
-Windows PowerShell 5.1's native-process input encoding may alter non-ASCII text.
-The command removes only the line ending added by the PowerShell pipeline.
-Copy the resulting bcrypt hash, then:
+There are no default login credentials. From the repository root:
 
 ```powershell
-docker exec -it live-chat-postgres psql -U livechat -d livechat
+npm.cmd --prefix backend run admin:bootstrap -- --name "Support Owner" --email "owner@example.com"
 ```
 
-Inside `psql`:
+Use your own name and a unique email that is not already assigned to an existing
+agent. The command prints a private `/set-password#token=...` path valid for
+24 hours. After starting the app in step 8, open
+`http://localhost:5173/set-password#token=THE_PRINTED_TOKEN`, choose a password,
+and sign in at `/login`.
 
-```sql
-\prompt 'Agent name: ' agent_name
-\prompt 'Agent email: ' agent_email
-\prompt 'Paste bcrypt hash: ' agent_hash
-INSERT INTO agents (name, email, password_hash)
-VALUES (:'agent_name', :'agent_email', :'agent_hash');
-\q
+Open **Manage agents** to invite staff, set each agent's maximum active chats
+(default five), and manage accounts. Deliver setup links privately to the intended
+agent. Email matching is normalized. Ordinary agents cannot manage accounts and
+can read/reply only to chats they accept. The waiting queue hides message content.
+
+If the initial setup link expires before use, reissue it with:
+
+```powershell
+npm.cmd --prefix backend run admin:bootstrap -- --reissue --email "owner@example.com"
 ```
 
-Sign in using this email and the original password, not the hash. Email matching
-is currently case-sensitive. Every agent can access the shared inbox.
+Reissue works only while the initial super admin has not completed password setup.
+See [Priority 1 setup and behavior](agent-ownership.md) for migration details.
 
 ## 8. Run backend and frontend
 
@@ -312,7 +301,8 @@ Invoke-RestMethod http://localhost:3001/ready
 
 Expected: `status: ok` from health and `status: ready`, `database: true`,
 `redis: true` from readiness. Open the widget in an incognito window, send a
-message, reply from the dashboard, and refresh to confirm history recovery.
+message, accept it from **Waiting Queue** as an online agent, reply in **My Chats**,
+and refresh to confirm history recovery.
 
 These URLs are for the new PC itself. Do not expose development database ports
 or the Vite server publicly; use the AWS guide for a hosted deployment.
