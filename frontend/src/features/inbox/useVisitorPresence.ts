@@ -14,22 +14,14 @@ export function useVisitorPresence(socket: ChatSocket, connected: boolean, visit
     let active = true;
     const ids = idsKey ? idsKey.split(',') : [];
     const tracked = new Set(ids);
-    const changed = new Set<string>();
     setKnown({});
     setError('');
     if (!connected) return;
 
-    const update = (payload: unknown, online: boolean) => {
-      if (!record(payload) || typeof payload.visitorId !== 'string' || !tracked.has(payload.visitorId)) return;
-      const id = payload.visitorId;
-      changed.add(id);
-      setKnown(current => ({ ...current, [id]: online }));
-    };
-    const onOnline = (payload: { visitorId: string }) => update(payload, true);
-    const onOffline = (payload: { visitorId: string }) => update(payload, false);
+    // Events contain no visitor identity. Refetch an authorized snapshot.
+    const onChange = () => { active = false; setAttempt(current => current + 1); };
     const onDisconnect = () => { active = false; setKnown({}); };
-    socket.on('visitor_online', onOnline);
-    socket.on('visitor_offline', onOffline);
+    socket.on('presence_changed', onChange);
     socket.on('disconnect', onDisconnect);
 
     async function snapshot() {
@@ -42,10 +34,9 @@ export function useVisitorPresence(socket: ChatSocket, connected: boolean, visit
             throw new Error('Invalid visitor presence response.');
           }
           const online = new Set(result.onlineVisitorIds);
-          // A newer live transition must win over a snapshot still in flight.
           setKnown(current => {
             const next = { ...current };
-            for (const id of batch) if (!changed.has(id)) next[id] = online.has(id);
+            for (const id of batch) next[id] = online.has(id);
             return next;
           });
         }
@@ -56,8 +47,7 @@ export function useVisitorPresence(socket: ChatSocket, connected: boolean, visit
     void snapshot();
     return () => {
       active = false;
-      socket.off('visitor_online', onOnline);
-      socket.off('visitor_offline', onOffline);
+      socket.off('presence_changed', onChange);
       socket.off('disconnect', onDisconnect);
     };
   }, [socket, connected, idsKey, attempt]);

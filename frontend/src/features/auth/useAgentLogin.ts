@@ -1,10 +1,10 @@
 import { useRef, useState } from 'react';
 import { api, errorMessage } from '@/lib/api';
-import { record } from '@/lib/contracts';
+import { isAgent, record, type Agent } from '@/lib/contracts';
 
-interface LoginResult { token: string; agent: { id: string; name: string; email: string } }
+interface LoginResult { token: string; agent: Agent }
 const isLoginResult = (value: unknown): value is LoginResult => record(value) && typeof value.token === 'string'
-  && record(value.agent) && typeof value.agent.id === 'string' && typeof value.agent.name === 'string' && typeof value.agent.email === 'string';
+  && isAgent(value.agent);
 
 export function useAgentLogin() {
   const [error, setError] = useState('');

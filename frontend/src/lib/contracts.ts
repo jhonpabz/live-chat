@@ -1,6 +1,24 @@
 import type { Socket } from 'socket.io-client';
 
 export type AgentStatus = 'online' | 'offline';
+export type InboxView = 'queue' | 'mine' | 'all';
+export interface Agent {
+  id: string; name: string; email: string; role: 'agent' | 'super_admin';
+  is_active: boolean; capacity: number; active_chats: number; pending_setup: boolean;
+}
+export interface AgentPage { agents: Agent[]; hasMore: boolean }
+export interface SetupCredential { setupToken: string; expiresAt: string }
+export function isAgent(value: unknown): value is Agent {
+  return record(value) && typeof value.id === 'string' && typeof value.name === 'string' && typeof value.email === 'string'
+    && (value.role === 'agent' || value.role === 'super_admin') && typeof value.is_active === 'boolean'
+    && typeof value.capacity === 'number' && typeof value.active_chats === 'number' && typeof value.pending_setup === 'boolean';
+}
+export function isAgentPage(value: unknown): value is AgentPage {
+  return record(value) && Array.isArray(value.agents) && value.agents.every(isAgent) && typeof value.hasMore === 'boolean';
+}
+export function isSetupCredential(value: unknown): value is SetupCredential {
+  return record(value) && typeof value.setupToken === 'string' && typeof value.expiresAt === 'string';
+}
 export interface Message {
   id: string;
   conversation_id: string;
@@ -19,6 +37,9 @@ export interface Conversation {
   ip_address: string | null;
   location: string | null;
   updated_at: string;
+  created_at: string;
+  agent_id: string | null;
+  agent_name: string | null;
 }
 export interface HistoryPage { messages: Message[]; hasMore: boolean }
 export interface ConversationPage { conversations: Conversation[]; hasMore: boolean }
@@ -30,13 +51,12 @@ export interface SendMessage { conversationId: string; content: string; clientMe
 export interface HistoryRequest { conversationId: string; before?: string; after?: string; limit?: number }
 interface ServerEvents {
   new_message: (message: Message) => void;
-  conversation_update: (data: { conversationId: string }) => void;
+  conversation_update: (data: Record<string, never>) => void;
   conversation_resolved: (data: { id: string }) => void;
   conversation_ready: (data: Ready) => void;
   support_availability: (data: { online: boolean }) => void;
   agent_status_current: (status: AgentStatus) => void;
-  visitor_online: (data: { visitorId: string }) => void;
-  visitor_offline: (data: { visitorId: string }) => void;
+  presence_changed: () => void;
   service_state: (data: { redis: boolean }) => void;
   session_expired: () => void;
   request_error: (error: Failure) => void;
@@ -65,7 +85,8 @@ export function isConversationPage(value: unknown): value is ConversationPage {
   return record(value) && typeof value.hasMore === 'boolean' && Array.isArray(value.conversations)
     && value.conversations.every(item => record(item) && typeof item.id === 'string' && typeof item.visitor_id === 'string'
       && typeof item.visitor_identity_id === 'string' && typeof item.status === 'string' && typeof item.updated_at === 'string'
-      && [item.last_message, item.ip_address, item.location].every(field => field === null || typeof field === 'string'));
+      && typeof item.created_at === 'string'
+      && [item.last_message, item.ip_address, item.location, item.agent_id, item.agent_name].every(field => field === null || typeof field === 'string'));
 }
 export function mergeMessages(current: Message[], incoming: Message[]): Message[] {
   const byId = new Map(current.map(message => [message.id, message]));
