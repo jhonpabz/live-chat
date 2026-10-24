@@ -59,6 +59,12 @@ procedure; there is no public admin recovery shortcut.
 Start matching frontend/backend versions after migration. No migration or
 bootstrap command is executed against your application database by the test suite.
 
+If nodemon reports `app crashed` and the startup message says to run `db:migrate`,
+apply the migration command above, then enter `rs` in the nodemon terminal (or
+restart `npm run dev`). Database changes alone do not trigger nodemon's file
+watcher. Check `http://localhost:3001/ready` before submitting password setup.
+Use the actual bootstrap link; a placeholder token cannot create an account.
+
 ## Super-admin workflow
 
 1. Sign in and open **Manage agents** (`/agents`).

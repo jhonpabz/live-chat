@@ -118,9 +118,13 @@ runs against the application database.
 
 ```sh
 cd frontend
+npm test
 npm run typecheck
 npm run build
 ```
+
+Frontend tests cover valid API responses, server errors, unavailable backends,
+malformed proxy responses, and request cancellation using Node's test runner.
 
 ## Operations and limits
 

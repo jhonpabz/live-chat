@@ -4,15 +4,36 @@ export class RequestError extends Error {
   constructor(public code: string, message: string) { super(message); }
 }
 
+function responseError(response: Response): RequestError {
+  if (response.status === 429) return new RequestError('RATE_LIMITED', 'Too many requests. Please wait before trying again.');
+  if (response.status >= 500) return new RequestError('SERVER_UNAVAILABLE', 'The support server is unavailable. Check that the backend is running, then try again.');
+  if (!response.ok) return new RequestError('REQUEST_FAILED', 'The request failed. Please try again.');
+  return new RequestError('INVALID_RESPONSE', 'The server returned an invalid response. Please try again.');
+}
+
 export async function api<T>(path: string, validate: (value: unknown) => value is T, token?: string, init?: RequestInit): Promise<T> {
   const headers = new Headers(init?.headers);
   if (token) headers.set('Authorization', `Bearer ${token}`);
   if (init?.body) headers.set('Content-Type', 'application/json');
-  const response = await fetch(path, { ...init, headers });
-  const data: unknown = await response.json();
+  let response: Response;
+  try {
+    response = await fetch(path, { ...init, headers });
+  } catch (failure) {
+    if (init?.signal?.aborted) throw failure;
+    throw new RequestError('SERVER_UNAVAILABLE', 'Cannot reach the support server. Check your connection and that the backend is running.');
+  }
+  let data: unknown;
+  try {
+    data = await response.json();
+  } catch (failure) {
+    if (init?.signal?.aborted) throw failure;
+    // Development/reverse proxies may return empty or HTML errors when Node is down.
+    throw responseError(response);
+  }
   if (!response.ok) {
     const error = record(data) && record(data.error) ? data.error : null;
-    throw new RequestError(typeof error?.code === 'string' ? error.code : 'REQUEST_FAILED', typeof error?.message === 'string' ? error.message : 'The request failed.');
+    const fallback = responseError(response);
+    throw new RequestError(typeof error?.code === 'string' ? error.code : fallback.code, typeof error?.message === 'string' ? error.message : fallback.message);
   }
   if (!validate(data)) throw new RequestError('INVALID_RESPONSE', 'The server returned an invalid response.');
   return data;
