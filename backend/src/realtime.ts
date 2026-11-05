@@ -170,7 +170,8 @@ function registerRealtime({ io, auth, chat, redisClient, presence, events }: { i
       const conversationId = uuid(input.conversationId, 'conversationId');
       if (typeof input.isTyping !== 'boolean') throw new AppError(400, 'INVALID_INPUT', 'isTyping must be a boolean.');
       await chat.authorize(socket.data.identity, conversationId);
-      if (Date.now() - lastTypingAt < 500) return {};
+      // Stop events must not be dropped immediately after a start event.
+      if (input.isTyping && Date.now() - lastTypingAt < 500) return {};
       lastTypingAt = Date.now();
       await events.publish(conversationId, 'typing', { conversationId, isTyping: input.isTyping, isAgent: socket.data.identity?.role !== 'visitor' }, socket.id);
       return {};

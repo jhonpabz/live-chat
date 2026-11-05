@@ -130,7 +130,7 @@ function InboxWorkspace({ account, token, logout }: { account: Agent; token: str
               <Button variant="outline" size="sm" disabled={resolving || selected.status === 'resolved'} onClick={() => { void resolve(); }}><CheckCircle className="h-4 w-4 mr-1" />{selected.status === 'resolved' ? 'Resolved' : resolving ? 'Resolving…' : 'Resolve'}</Button>
             </div>
             <MessageList messages={chat.messages} ownSender="agent" loading={chat.loading} hasOlder={chat.hasOlder} onLoadOlder={() => { void chat.loadOlder(); }} />
-            <MessageComposer key={selected.id} disabled={!session.connected || selected.status !== 'open'} retryDisabled={!session.connected} sending={chat.sending} pendingContent={chat.pending?.content} onSend={chat.send} onRetry={chat.retrySend} />
+            <MessageComposer socket={session.socket} conversationId={selected.id} isAgent key={selected.id} disabled={!session.connected || selected.status !== 'open'} retryDisabled={!session.connected} sending={chat.sending} pendingContent={chat.pending?.content} onSend={chat.send} onRetry={chat.retrySend} />
           </> : <div className="flex-1 flex items-center justify-center text-muted-foreground"><div className="text-center"><MessageSquare className="h-12 w-12 mx-auto mb-4 opacity-50" /><p>Select a conversation to start</p></div></div>}
         </main>
       </div>

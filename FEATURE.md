@@ -4,6 +4,7 @@ This list describes the current implementation. Partially implemented features r
 
 ## Implemented Features
 
+- **Typing indicators** - Visitor chat and the agent inbox show live typing status, with throttled updates, idle expiry, and cleanup on send, blur, chat switch, or disconnect.
 - **Agent availability** — Widget shows Online when at least one connected agent is online, and Offline otherwise. Updates on status changes, connections, and disconnects; tabs for the same agent stay synchronized.
 - **Visitor presence** — Dashboard shows Online/Offline indicators in conversation rows and the selected chat header. Reloads presence on reconnect, handles multiple visitor tabs, and shows Unknown while the dashboard is disconnected.
 - **Agent login** — Email/password authentication using JWT and hashed passwords.
@@ -40,7 +41,6 @@ See [setup, permissions, and operation](docs/agent-ownership.md). Setup-link del
 
 ## Partially Implemented Features
 
-- **Typing indicators** — Backend events exist; UI integration is missing.
 - **Quick replies** — Database and read API exist; no dashboard picker or editor.
 - **Visitor location** — Display and database fields exist; automatic location lookup is missing.
 - **Read receipts** — The `messages.is_read` field exists; marking messages as read and displaying receipts are missing.

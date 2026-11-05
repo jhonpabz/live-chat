@@ -65,6 +65,12 @@ test('real HTTP/socket flow: authentication, own echoes, retries, reconnect hist
   const agent = await connect({ token: auth.agentToken(account) });
   assert.equal((await supportOnline).online, true);
   await chat.accept({ id: agentId, role: 'agent', version: 0 }, conversationId);
+  const typingStarted = event(visitor, 'typing');
+  assert.equal((await acknowledge(agent, 'typing', { conversationId, isTyping: true })).ok, true);
+  assert.deepEqual(await typingStarted, { conversationId, isTyping: true, isAgent: true });
+  const typingStopped = event(visitor, 'typing');
+  assert.equal((await acknowledge(agent, 'typing', { conversationId, isTyping: false })).ok, true);
+  assert.deepEqual(await typingStopped, { conversationId, isTyping: false, isAgent: true });
   const visitorId = auth.visitor(ready.data.visitorToken).id;
   const offlineVisitorId = randomUUID();
   const snapshot = () => acknowledge(agent, 'visitor_presence', { visitorIds: [visitorId, offlineVisitorId] });

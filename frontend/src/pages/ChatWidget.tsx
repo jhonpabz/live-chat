@@ -23,7 +23,7 @@ export default function ChatWidget() {
           {chat.expired && <Button variant="outline" onClick={chat.newSession}>Start a new session</Button>}
           <MessageList messages={chat.messages} ownSender="visitor" loading={chat.loading || chat.joining} hasOlder={chat.hasOlder} onLoadOlder={() => { void chat.loadOlder(); }} welcome={chat.settings.welcome_message} />
           {chat.resolved && <div className="p-2 text-sm" role="status">This conversation is resolved. <button className="underline" onClick={() => { void chat.join(); }}>Start a new chat</button></div>}
-          <MessageComposer key={chat.conversationId || 'connecting'} disabled={!chat.connected || !chat.conversationId || chat.resolved || chat.joining || chat.expired} retryDisabled={!chat.connected || chat.joining || chat.expired} sending={chat.sending} pendingContent={chat.pending?.content} onSend={chat.send} onRetry={chat.retrySend} />
+          <MessageComposer socket={chat.socket} conversationId={chat.conversationId} isAgent={false} key={chat.conversationId || 'connecting'} disabled={!chat.connected || !chat.conversationId || chat.resolved || chat.joining || chat.expired} retryDisabled={!chat.connected || chat.joining || chat.expired} sending={chat.sending} pendingContent={chat.pending?.content} onSend={chat.send} onRetry={chat.retrySend} />
         </section>
       )}
     </div>

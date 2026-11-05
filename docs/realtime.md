@@ -64,7 +64,13 @@ Supported request events:
   reconnect. A presence invalidation cancels the in-flight snapshot and fetches
   a new one, preventing stale responses from overwriting the current state.
 - `typing`: `{ conversationId, isTyping }`. Requires conversation access; broadcasts
-  are throttled to one per 500 ms per socket. Returns `{}`. UI integration is pending.
+  for active typing are throttled to one per 500 ms per socket; stop events are
+  delivered immediately. Returns `{}`. Both composers send volatile updates at
+  most once per second while typing and stop after 1.5 seconds of inactivity,
+  on blur, send, or close. Remote indicators expire after 4 seconds without an
+  update and clear on a received message, chat switch, resolution, or disconnect.
+  Only typing from the opposite side is displayed; same-side tabs do not show
+  their own typing.
 
 Server events:
 

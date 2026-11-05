@@ -49,7 +49,9 @@ export interface Failure { code: string; message: string }
 export type Ack<T> = { ok: true; data: T } | { ok: false; error: Failure };
 export interface SendMessage { conversationId: string; content: string; clientMessageId: string }
 export interface HistoryRequest { conversationId: string; before?: string; after?: string; limit?: number }
+export interface TypingEvent { conversationId: string; isTyping: boolean; isAgent: boolean }
 interface ServerEvents {
+  typing: (data: TypingEvent) => void;
   new_message: (message: Message) => void;
   conversation_update: (data: Record<string, never>) => void;
   conversation_resolved: (data: { id: string }) => void;
@@ -62,6 +64,7 @@ interface ServerEvents {
   request_error: (error: Failure) => void;
 }
 interface ClientEvents {
+  typing: (data: { conversationId: string; isTyping: boolean }, ack?: (result: Ack<Record<string, never>>) => void) => void;
   visitor_join: (data: Record<string, never>, ack: (result: Ack<Ready>) => void) => void;
   message_history: (data: HistoryRequest, ack: (result: Ack<HistoryPage>) => void) => void;
   send_message: (data: SendMessage, ack: (result: Ack<Message>) => void) => void;
