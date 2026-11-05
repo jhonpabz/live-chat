@@ -14,6 +14,18 @@ or `cp .env.example .env` on Linux). Generate two separate secrets:
 docker run --rm node:24-bookworm-slim node -e "console.log(require('node:crypto').randomBytes(32).toString('hex'))"
 ```
 
+or
+
+```sh
+$secret = docker run --rm node:24-bookworm-slim node -e "console.log(require('node:crypto').randomBytes(32).toString('hex'))"
+
+if ($LASTEXITCODE -eq 0 -and $secret -match '^[a-f0-9]{64}$') {
+    $content = Get-Content .env -Raw
+    $content -replace '(?m)^JWT_SECRET=.*$', "JWT_SECRET=$secret" |
+        Set-Content .env -Encoding utf8
+}
+```
+
 Run that command twice. Set `POSTGRES_PASSWORD` to the first value and
 `JWT_SECRET` to the second in the root `.env`. Use hexadecimal passwords so
 the password is also safe inside the database connection URL. Keep this file
