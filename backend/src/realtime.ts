@@ -1,8 +1,15 @@
-const { AppError, publicError, logError } = require('./errors');
-const { object, uuid } = require('./validation');
-const { createRateLimit } = require('./rate-limit');
+import type { RedisClientType } from 'redis';
+import type { ExtendedError } from 'socket.io';
+import type { ChatServer, ClientEvent, Ack } from './socket.types';
+import type { Auth } from './auth';
+import type { ChatService } from './chat.service';
+import type { ChatEvents } from './chat.events';
+import type { Presence } from './presence';
+import { AppError, publicError, logError } from './errors';
+import { object, uuid } from './validation';
+import { createRateLimit } from './rate-limit';
 
-function registerRealtime({ io, auth, chat, redisClient, presence, events }) {
+function registerRealtime({ io, auth, chat, redisClient, presence, events }: { io: ChatServer; auth: Auth; chat: ChatService; redisClient: Pick<RedisClientType, "isReady" | "multi" | "del">; presence: Presence; events: ChatEvents }) {
   const handshakeLimit = createRateLimit({ limit: 60, windowMs: 60000 });
   const eventLimit = createRateLimit({ limit: 180, windowMs: 60000 });
   const broadcastAvailability = () => io.emit('support_availability', presence.availability());
@@ -35,14 +42,14 @@ function registerRealtime({ io, auth, chat, redisClient, presence, events }) {
       else if (credentials.visitorToken !== undefined) socket.data.identity = auth.visitor(credentials.visitorToken);
       next();
     } catch (error) {
-      const failure = new Error(publicError(error).message);
+      const failure: ExtendedError = new Error(publicError(error).message);
       failure.data = publicError(error);
       next(failure);
     }
   });
 
   io.on('connection', socket => {
-    let expiryTimer;
+    let expiryTimer: NodeJS.Timeout | undefined;
     let joining = false;
     function scheduleExpiry() {
       clearTimeout(expiryTimer);
@@ -51,7 +58,7 @@ function registerRealtime({ io, auth, chat, redisClient, presence, events }) {
       const remaining = identity.exp * 1000 - Date.now();
       // Node timers are signed 32-bit milliseconds; visitors may live for 30 days.
       expiryTimer = setTimeout(() => {
-        if (Date.now() >= socket.data.identity.exp * 1000) {
+        if (Date.now() >= identity.exp * 1000) {
           socket.emit('session_expired');
           socket.disconnect(true);
         } else scheduleExpiry();
@@ -70,22 +77,22 @@ function registerRealtime({ io, auth, chat, redisClient, presence, events }) {
         const acknowledge = packet[packet.length - 1];
         if (typeof acknowledge === 'function') acknowledge({ ok: false, error: publicError(error) });
         socket.emit('request_error', publicError(error));
-        if (error.status === 401) socket.disconnect(true);
-        next(error);
+        if (error instanceof AppError && error.status === 401) socket.disconnect(true);
+        next(error instanceof Error ? error : new Error(publicError(error).message));
       }
     });
     socket.on('error', error => {
       if (!(error instanceof AppError)) logError(error);
     });
 
-    function handle(event, work) {
+    function handle(event: ClientEvent, work: (payload: unknown) => unknown | Promise<unknown>) {
       socket.on(event, async (payload, acknowledge) => {
         try {
           const data = await work(payload);
           if (typeof acknowledge === 'function') acknowledge({ ok: true, data });
         } catch (error) {
           if (!(error instanceof AppError)) logError(error);
-          const failure = { ok: false, error: publicError(error) };
+          const failure: Ack<never> = { ok: false, error: publicError(error) };
           if (typeof acknowledge === 'function') acknowledge(failure);
           else socket.emit('request_error', failure.error);
         }
@@ -105,14 +112,14 @@ function registerRealtime({ io, auth, chat, redisClient, presence, events }) {
     handle('agent_status', status => {
       const identity = socket.data.identity;
       if (identity?.role !== 'agent') throw new AppError(403, 'FORBIDDEN', 'Agent access required.');
-      if (!['online', 'offline'].includes(status)) throw new AppError(400, 'INVALID_INPUT', 'Choose online or offline.');
+      if (status !== 'online' && status !== 'offline') throw new AppError(400, 'INVALID_INPUT', 'Choose online or offline.');
       for (const socketId of presence.setStatus(identity.id, status)) io.to(socketId).emit('agent_status_current', status);
       broadcastAvailability();
       return { status };
     });
 
     handle('visitor_presence', async payload => {
-      if (!['agent', 'super_admin'].includes(socket.data.identity?.role)) throw new AppError(403, 'FORBIDDEN', 'Staff access required.');
+      if (!socket.data.identity || socket.data.identity.role === 'visitor') throw new AppError(403, 'FORBIDDEN', 'Staff access required.');
       const input = object(payload);
       if (!Array.isArray(input.visitorIds) || input.visitorIds.length > 100) {
         throw new AppError(400, 'INVALID_INPUT', 'Request at most 100 visitor IDs.');
@@ -165,7 +172,7 @@ function registerRealtime({ io, auth, chat, redisClient, presence, events }) {
       await chat.authorize(socket.data.identity, conversationId);
       if (Date.now() - lastTypingAt < 500) return {};
       lastTypingAt = Date.now();
-      await events.publish(conversationId, 'typing', { conversationId, isTyping: input.isTyping, isAgent: socket.data.identity.role !== 'visitor' }, socket.id);
+      await events.publish(conversationId, 'typing', { conversationId, isTyping: input.isTyping, isAgent: socket.data.identity?.role !== 'visitor' }, socket.id);
       return {};
     });
 
@@ -183,4 +190,4 @@ function registerRealtime({ io, auth, chat, redisClient, presence, events }) {
   return () => clearInterval(heartbeat);
 }
 
-module.exports = { registerRealtime };
+export { registerRealtime };

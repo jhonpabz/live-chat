@@ -1,6 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { Presence } = require('../src/presence');
+const { Presence } = require('../dist/src/presence');
 
 test('availability tracks multiple agents, shared tab status, and last disconnect', () => {
   const presence = new Presence();

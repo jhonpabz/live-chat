@@ -7,13 +7,13 @@ const { createRequire } = require('node:module');
 const { Server } = require('socket.io');
 // Exercise the actual client version shipped by the frontend; install both packages.
 const { io: client } = createRequire(require.resolve('../../frontend/package.json'))('socket.io-client');
-const { createAuth } = require('../src/auth');
-const { createChatService } = require('../src/chat.service');
-const { createApp } = require('../src/app');
-const { registerRealtime } = require('../src/realtime');
+const { createAuth } = require('../dist/src/auth');
+const { createChatService } = require('../dist/src/chat.service');
+const { createApp } = require('../dist/src/app');
+const { registerRealtime } = require('../dist/src/realtime');
 const { memoryRepository } = require('./helpers/memory-repository');
-const { Presence } = require('../src/presence');
-const { createChatEvents } = require('../src/chat.events');
+const { Presence } = require('../dist/src/presence');
+const { createChatEvents } = require('../dist/src/chat.events');
 
 test('real HTTP/socket flow: authentication, own echoes, retries, reconnect history, and safe failures', { timeout: 20000 }, async t => {
   const repository = memoryRepository();

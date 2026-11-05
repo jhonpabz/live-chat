@@ -1,8 +1,8 @@
-const { AppError } = require('./errors');
+import { AppError } from './errors';
 
-function createRateLimit({ limit, windowMs, maxKeys = 10000, now = Date.now }) {
-  const buckets = new Map();
-  return key => {
+function createRateLimit({ limit, windowMs, maxKeys = 10000, now = Date.now }: { limit: number; windowMs: number; maxKeys?: number; now?: () => number }) {
+  const buckets = new Map<string | undefined, { count: number; expires: number }>();
+  return (key: string | undefined) => {
     const time = now();
     let bucket = buckets.get(key);
     if (!bucket || bucket.expires <= time) {
@@ -17,4 +17,4 @@ function createRateLimit({ limit, windowMs, maxKeys = 10000, now = Date.now }) {
   };
 }
 
-module.exports = { createRateLimit };
+export { createRateLimit };

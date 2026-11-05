@@ -42,7 +42,7 @@ services:
 
   migrate:
     <<: *backend
-    command: [node, scripts/migrate.js]
+    command: [node, dist/scripts/migrate.js]
     restart: "no"
     depends_on:
       postgres:

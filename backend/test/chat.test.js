@@ -1,8 +1,8 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const { randomUUID } = require('node:crypto');
-const { createChatService } = require('../src/chat.service');
-const { createChatRepository } = require('../src/chat.repository');
+const { createChatService } = require('../dist/src/chat.service');
+const { createChatRepository } = require('../dist/src/chat.repository');
 const { memoryRepository } = require('./helpers/memory-repository');
 
 async function fixture() {

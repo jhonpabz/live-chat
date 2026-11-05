@@ -112,6 +112,7 @@ From the repository root:
 
 ```powershell
 npm.cmd --prefix backend ci
+npm.cmd --prefix backend run build
 npm.cmd --prefix frontend ci
 ```
 
@@ -351,6 +352,7 @@ For source updates, first save or commit local work, then:
 ```powershell
 git pull --ff-only
 npm.cmd --prefix backend ci
+npm.cmd --prefix backend run build
 npm.cmd --prefix frontend ci
 ```
 

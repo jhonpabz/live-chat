@@ -1,19 +1,25 @@
-﻿require('dotenv').config({ path: require('node:path').join(__dirname, '.env') });
-const http = require('node:http');
-const { Server } = require('socket.io');
-const { Pool, types } = require('pg');
-const redis = require('redis');
-const { loadConfig } = require('./src/config');
-const { createAuth } = require('./src/auth');
-const { createChatRepository } = require('./src/chat.repository');
-const { createChatService } = require('./src/chat.service');
-const { createApp } = require('./src/app');
-const { registerRealtime } = require('./src/realtime');
-const { logError } = require('./src/errors');
-const { Presence } = require('./src/presence');
-const { createChatEvents } = require('./src/chat.events');
-const { createAccountsRepository } = require('./src/accounts.repository');
-const { createAccountsService } = require('./src/accounts.service');
+import type { ChatServer } from './src/socket.types';
+import dotenv from 'dotenv';
+import { join } from 'node:path';
+import { backendRoot } from './src/paths';
+import { errorCode } from './src/errors';
+import http from 'node:http';
+import { Server } from 'socket.io';
+import { Pool, types } from 'pg';
+import { createClient } from 'redis';
+import { loadConfig } from './src/config';
+import { createAuth } from './src/auth';
+import { createChatRepository } from './src/chat.repository';
+import { createChatService } from './src/chat.service';
+import { createApp } from './src/app';
+import { registerRealtime } from './src/realtime';
+import { logError } from './src/errors';
+import { Presence } from './src/presence';
+import { createChatEvents } from './src/chat.events';
+import { createAccountsRepository } from './src/accounts.repository';
+import { createAccountsService } from './src/accounts.service';
+
+dotenv.config({ path: join(backendRoot, '.env') });
 
 async function start() {
   const config = loadConfig();
@@ -24,10 +30,10 @@ async function start() {
   });
   const pool = new Pool({ connectionString: config.databaseUrl, connectionTimeoutMillis: 5000, options: '-c timezone=UTC -c statement_timeout=10000' });
   pool.on('error', logError);
-  const redisClient = redis.createClient({ url: config.redisUrl, disableOfflineQueue: true, socket: { connectTimeout: 5000 } });
+  const redisClient = createClient({ url: config.redisUrl, disableOfflineQueue: true, socket: { connectTimeout: 5000 } });
   redisClient.on('error', () => console.error(JSON.stringify({ event: 'redis_unavailable' })));
   const server = http.createServer((req, res) => app(req, res));
-  const io = new Server(server, {
+  const io: ChatServer = new Server(server, {
     cors: { origin: config.origins, methods: ['GET', 'POST'] },
     maxHttpBufferSize: 16384,
     allowRequest: (req, callback) => callback(null, !req.headers.origin || config.origins.includes(req.headers.origin))
@@ -46,7 +52,7 @@ async function start() {
     stopPresence();
     const timeout = setTimeout(() => process.exit(1), 10000);
     timeout.unref();
-    await new Promise(resolve => io.close(resolve));
+    await new Promise<void>(resolve => io.close(() => resolve()));
     await pool.end();
     if (redisClient.isOpen) await redisClient.disconnect();
     clearTimeout(timeout);
@@ -58,21 +64,21 @@ async function start() {
     await pool.query('SELECT role, session_version, setup_token_hash, capacity FROM agents LIMIT 0');
     await pool.query('SELECT id FROM conversation_assignments LIMIT 0');
     redisClient.connect().catch(logError);
-    await new Promise((resolve, reject) => {
+    await new Promise<void>((resolve, reject) => {
       server.once('error', reject);
       server.listen(config.port, '0.0.0.0', resolve);
     });
     console.log(JSON.stringify({ event: 'server_started', port: config.port }));
   } catch (error) {
     await shutdown();
-    if (['42703', '42P01'].includes(error.code)) throw new Error('Run npm run db:migrate from the backend directory before starting the server.');
+    if (['42703', '42P01'].includes(errorCode(error) || '')) throw new Error('Run npm run db:migrate from the backend directory before starting the server.');
     throw error;
   }
 }
 
-if (require.main === module) start().catch(error => {
-  console.error(JSON.stringify({ event: 'startup_failed', message: error.code ? 'Check database connectivity and configuration.' : error.message }));
+if (require.main === module) start().catch((error: unknown) => {
+  console.error(JSON.stringify({ event: 'startup_failed', message: errorCode(error) ? 'Check database connectivity and configuration.' : (error instanceof Error ? error.message : 'Unexpected failure.') }));
   process.exitCode = 1;
 });
 
-module.exports = { start };
+export { start };

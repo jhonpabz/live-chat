@@ -1,13 +1,16 @@
-function loadConfig(env = process.env) {
+function loadConfig(env: NodeJS.ProcessEnv = process.env) {
   for (const key of ['DATABASE_URL', 'REDIS_URL', 'JWT_SECRET']) {
     if (!env[key]) throw new Error(`${key} is required. See backend/.env.example.`);
   }
-  if (env.JWT_SECRET.length < 32 || env.JWT_SECRET.startsWith('replace-') || env.JWT_SECRET === 'your-super-secret-jwt-key-change-this') {
+  const databaseUrl = required(env, 'DATABASE_URL');
+  const redisUrl = required(env, 'REDIS_URL');
+  const jwtSecret = required(env, 'JWT_SECRET');
+  if (jwtSecret.length < 32 || jwtSecret.startsWith('replace-') || jwtSecret === 'your-super-secret-jwt-key-change-this') {
     throw new Error('JWT_SECRET must be a unique secret of at least 32 characters.');
   }
-  for (const [key, protocols] of [['DATABASE_URL', ['postgres:', 'postgresql:']], ['REDIS_URL', ['redis:', 'rediss:']]]) {
+  for (const [key, protocols] of [['DATABASE_URL', ['postgres:', 'postgresql:']], ['REDIS_URL', ['redis:', 'rediss:']]] as const) {
     try {
-      if (!protocols.includes(new URL(env[key]).protocol)) throw new Error();
+      if (!protocols.some(protocol => protocol === new URL(required(env, key)).protocol)) throw new Error();
     } catch {
       throw new Error(`${key} must be a valid connection URL.`);
     }
@@ -24,7 +27,12 @@ function loadConfig(env = process.env) {
       throw new Error('ALLOWED_ORIGINS must contain comma-separated HTTP origins without paths.');
     }
   }
-  return { port, origins, databaseUrl: env.DATABASE_URL, redisUrl: env.REDIS_URL, jwtSecret: env.JWT_SECRET };
+  return { port, origins, databaseUrl, redisUrl, jwtSecret };
 }
 
-module.exports = { loadConfig };
+function required(env: NodeJS.ProcessEnv, key: string): string {
+  const value = env[key];
+  if (!value) throw new Error(key + ' is required. See backend/.env.example.');
+  return value;
+}
+export { loadConfig };

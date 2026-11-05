@@ -2,9 +2,9 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const { randomUUID } = require('node:crypto');
 const jwt = require('jsonwebtoken');
-const { createAuth } = require('../src/auth');
-const { loadConfig } = require('../src/config');
-const { createRateLimit } = require('../src/rate-limit');
+const { createAuth } = require('../dist/src/auth');
+const { loadConfig } = require('../dist/src/config');
+const { createRateLimit } = require('../dist/src/rate-limit');
 
 const secret = 'test-only-secret-that-is-at-least-32-characters';
 test('configuration errors name fields without disclosing secrets', () => {

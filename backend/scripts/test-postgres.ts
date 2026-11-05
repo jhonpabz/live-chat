@@ -1,7 +1,12 @@
-require('dotenv').config({ path: require('node:path').join(__dirname, '..', '.env') });
-const { randomBytes } = require('node:crypto');
-const { spawn } = require('node:child_process');
-const { Pool } = require('pg');
+import dotenv from 'dotenv';
+import { join } from 'node:path';
+import { backendRoot } from '../src/paths';
+import { errorCode } from '../src/errors';
+import { randomBytes } from 'node:crypto';
+import { spawn } from 'node:child_process';
+import { Pool } from 'pg';
+
+dotenv.config({ path: join(backendRoot, '.env') });
 
 async function run() {
   const url = new URL(process.env.DATABASE_URL || '');
@@ -19,7 +24,7 @@ async function run() {
     created = true;
     url.pathname = `/${database}`;
     const child = spawn(process.execPath, ['--test', 'test/postgres.integration.js'], {
-      cwd: require('node:path').join(__dirname, '..'),
+      cwd: backendRoot,
       env: { ...process.env, LIVECHAT_ISOLATED_DATABASE_URL: url.toString() },
       stdio: 'inherit', windowsHide: true
     });
@@ -31,7 +36,7 @@ async function run() {
   }
 }
 
-run().catch(error => {
-  console.error(`Isolated PostgreSQL tests could not run (${error.code || 'configuration error'}). Check that local PostgreSQL is running and the configured user can create test databases.`);
+run().catch((error: unknown) => {
+  console.error(`Isolated PostgreSQL tests could not run (${errorCode(error) || 'configuration error'}). Check that local PostgreSQL is running and the configured user can create test databases.`);
   process.exitCode = 1;
 });

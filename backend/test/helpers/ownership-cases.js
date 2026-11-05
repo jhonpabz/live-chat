@@ -5,15 +5,15 @@ const { randomUUID } = require('node:crypto');
 const { createRequire } = require('node:module');
 const { Server } = require('socket.io');
 const { io: client } = createRequire(require.resolve('../../../frontend/package.json'))('socket.io-client');
-const { createAuth } = require('../../src/auth');
-const { createAccountsRepository } = require('../../src/accounts.repository');
-const { createAccountsService } = require('../../src/accounts.service');
-const { createChatRepository } = require('../../src/chat.repository');
-const { createChatService } = require('../../src/chat.service');
-const { createChatEvents } = require('../../src/chat.events');
-const { createApp } = require('../../src/app');
-const { registerRealtime } = require('../../src/realtime');
-const { Presence } = require('../../src/presence');
+const { createAuth } = require('../../dist/src/auth');
+const { createAccountsRepository } = require('../../dist/src/accounts.repository');
+const { createAccountsService } = require('../../dist/src/accounts.service');
+const { createChatRepository } = require('../../dist/src/chat.repository');
+const { createChatService } = require('../../dist/src/chat.service');
+const { createChatEvents } = require('../../dist/src/chat.events');
+const { createApp } = require('../../dist/src/app');
+const { registerRealtime } = require('../../dist/src/realtime');
+const { Presence } = require('../../dist/src/presence');
 
 async function ownershipCases(t, pool) {
   const auth = createAuth(pool, 'isolated-ownership-test-secret-at-least-32-characters');

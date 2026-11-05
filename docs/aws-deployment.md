@@ -31,10 +31,10 @@ not need to connect to it directly.
 
 This matches the repository:
 
-- `backend/server.js` starts the server with `npm start`.
+- `backend/server.ts` compiles to `backend/dist/server.js`; `npm start` runs the compiled server.
 - `backend/.env.example` lists the required backend settings.
 - `backend/schema.sql` initializes an empty database.
-- `backend/scripts/migrate.js` applies the existing additive migration.
+- `backend/scripts/migrate.ts` applies the existing additive migration.
 - `frontend/src/lib/api.ts` uses relative API paths.
 - `frontend/src/features/chat/useChatSession.ts` connects to the same origin.
 - `frontend/vite.config.ts` provides a development proxy only. Nginx replaces it
@@ -198,6 +198,7 @@ sudo install -d -o ubuntu -g ubuntu -m 755 /srv/live-chat
 tar -xzf /home/ubuntu/live-chat-upload.tar.gz -C /srv/live-chat
 cd /srv/live-chat/backend
 npm ci
+npm run build
 cd /srv/live-chat/frontend
 npm ci
 ```
@@ -375,7 +376,7 @@ Group=livechat
 WorkingDirectory=/srv/live-chat/backend
 Environment=NODE_ENV=production
 Environment=PATH=/usr/local/bin:/usr/bin:/bin
-ExecStart=/usr/local/bin/node /srv/live-chat/backend/server.js
+ExecStart=/usr/local/bin/node /srv/live-chat/backend/dist/server.js
 Restart=on-failure
 RestartSec=5
 TimeoutStopSec=15
@@ -658,6 +659,7 @@ commands at the running application database.
    tar -xzf /home/ubuntu/live-chat-upload.tar.gz -C /srv/live-chat
    cd /srv/live-chat/backend
    npm ci
+   npm run build
    cd /srv/live-chat/frontend
    npm ci
    cd /srv/live-chat/backend

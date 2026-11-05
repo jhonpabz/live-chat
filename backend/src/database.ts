@@ -1,4 +1,6 @@
-async function transaction(pool, work) {
+import type { Pool, PoolClient } from 'pg';
+
+async function transaction<T>(pool: Pool, work: (client: PoolClient) => Promise<T>): Promise<T> {
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
@@ -11,4 +13,4 @@ async function transaction(pool, work) {
   } finally { client.release(); }
 }
 
-module.exports = { transaction };
+export { transaction };

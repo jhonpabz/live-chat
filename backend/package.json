@@ -2,14 +2,16 @@
   "name": "live-chat-backend",
   "version": "1.0.0",
   "description": "Live Chat Customer Support Backend",
-  "main": "server.js",
+  "main": "dist/server.js",
   "scripts": {
-    "start": "node server.js",
-    "dev": "nodemon server.js",
-    "db:migrate": "node scripts/migrate.js",
-    "admin:bootstrap": "node scripts/bootstrap-admin.js",
-    "test": "node --test test/*.test.js",
-    "test:postgres": "node scripts/test-postgres.js"
+    "start": "node dist/server.js",
+    "dev": "nodemon --watch src --watch server.ts --ext ts --exec \"npm run build && node dist/server.js\"",
+    "db:migrate": "node dist/scripts/migrate.js",
+    "admin:bootstrap": "node dist/scripts/bootstrap-admin.js",
+    "test": "npm run build && node --test test/*.test.js",
+    "test:postgres": "npm run build && node dist/scripts/test-postgres.js",
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",
@@ -23,6 +25,13 @@
     "uuid": "^10.0.0"
   },
   "devDependencies": {
-    "nodemon": "^3.1.4"
+    "@types/bcryptjs": "^2.4.6",
+    "@types/cors": "^2.8.19",
+    "@types/express": "^4.17.25",
+    "@types/jsonwebtoken": "^9.0.10",
+    "@types/node": "^24.19.2",
+    "@types/pg": "^8.23.1",
+    "nodemon": "^3.1.4",
+    "typescript": "5.9"
   }
 }

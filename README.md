@@ -10,12 +10,12 @@ implemented features and remaining extensions.
 - `frontend/src/features/`: authentication, inbox, socket lifecycle, and message hooks.
 - `frontend/src/components/`: shared message list, composer, and UI controls.
 - `frontend/src/lib/`: public TypeScript contracts, response validation, and HTTP helpers.
-- `backend/server.js`: validated configuration, infrastructure startup, and shutdown.
-- `backend/src/app.js`: HTTP routes and error responses; can be constructed without listening.
-- `backend/src/realtime.js`: socket authentication and event registration.
-- `backend/src/chat.service.js`: ownership checks, conversation rules, and transactions.
-- `backend/src/chat.repository.js`: parameterized PostgreSQL queries and persistence.
-- `backend/src/presence.js`: connection-aware availability and multiple-tab behavior.
+- `backend/server.ts`: validated configuration, infrastructure startup, and shutdown.
+- `backend/src/app.ts`: HTTP routes and error responses; can be constructed without listening.
+- `backend/src/realtime.ts`: socket authentication and event registration.
+- `backend/src/chat.service.ts`: ownership checks, conversation rules, and transactions.
+- `backend/src/chat.repository.ts`: parameterized PostgreSQL queries and persistence.
+- `backend/src/presence.ts`: connection-aware availability and multiple-tab behavior.
 - `backend/migrations/`: additive changes for existing databases.
 - `backend/test/`: regression tests and isolated PostgreSQL integration tests.
 - `docs/realtime.md`: transport contracts, ordering, recovery, and operational limits.
@@ -34,6 +34,11 @@ For a new PC, follow [Clone and install locally](docs/local-installation.md) for
 required applications and versions, Windows setup, PostgreSQL/Redis, agent
 creation, and verification commands.
 
+The backend uses strict TypeScript compiled to `backend/dist`. Run `npm run build`
+in `backend` after installation and before production startup, migrations, or
+admin CLI commands. `npm run dev` rebuilds on source changes; `npm test` builds
+before exercising the compiled code. Tests remain JavaScript using Node's test runner. Docker builds the backend automatically.
+
 Use npm in each package. Development was verified with Node.js 24. PostgreSQL and
 Redis must be available locally; PostgreSQL is the durable source of truth.
 
@@ -48,6 +53,8 @@ Redis must be available locally; PostgreSQL is the durable source of truth.
 
    ```sh
    cd backend
+   npm ci
+   npm run build
    npm run db:migrate
    ```
 
@@ -56,7 +63,7 @@ Redis must be available locally; PostgreSQL is the durable source of truth.
    The backend checks for the new
    column before accepting traffic; it does not run migrations automatically.
 
-2. In `backend`, run `npm ci`, copy `.env.example` to `.env`, and set:
+2. In `backend`, run `npm ci` and `npm run build`, copy `.env.example` to `.env`, and set:
 
    - `DATABASE_URL`: PostgreSQL connection URL.
    - `REDIS_URL`: Redis connection URL.
@@ -92,7 +99,7 @@ The backend binds to `0.0.0.0` and respects `PORT`.
 
 ## Upgrading from the initial version
 
-Run `npm run db:migrate` in `backend` to apply both versioned migrations, check `.env` against the example,
+Run `npm run build` then `npm run db:migrate` in `backend` to apply both versioned migrations, check `.env` against the example,
 and restart the backend and frontend together. Message acknowledgements and
 paginated responses require matching client/server versions. Migration 002 adds
 roles, account lifecycle, configurable capacity, and assignment history. Existing

@@ -3,7 +3,9 @@
 Install Docker Engine with Compose v2, or Docker Desktop in Linux container
 mode. Run all commands from the repository root. Node.js is not required on
 the host. The frontend build and backend dependencies use their existing npm
-lockfiles.
+lockfiles. The backend image compiles strict TypeScript in a build stage and
+runs `dist/server.js` with production dependencies only. Migration and admin
+commands also use compiled files; Docker users do not need a separate build command.
 
 ## First start
 

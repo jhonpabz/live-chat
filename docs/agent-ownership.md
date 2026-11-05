@@ -11,6 +11,7 @@ For a new database, initialize `backend/schema.sql`. For an existing database,
 back up first, stop the old backend, and run from the repository root:
 
 ```powershell
+npm.cmd --prefix backend run build
 npm.cmd --prefix backend run db:migrate
 npm.cmd --prefix backend run admin:bootstrap -- --name "Support Owner" --email "owner@example.com"
 ```

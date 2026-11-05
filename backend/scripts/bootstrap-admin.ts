@@ -1,8 +1,13 @@
-require('dotenv').config({ path: require('node:path').join(__dirname, '..', '.env') });
-const { Pool } = require('pg');
-const { parseArgs } = require('node:util');
-const { createAccountsRepository } = require('../src/accounts.repository');
-const { createAccountsService } = require('../src/accounts.service');
+import dotenv from 'dotenv';
+import { join } from 'node:path';
+import { backendRoot } from '../src/paths';
+import { errorCode } from '../src/errors';
+import { Pool } from 'pg';
+import { parseArgs } from 'node:util';
+import { createAccountsRepository } from '../src/accounts.repository';
+import { createAccountsService } from '../src/accounts.service';
+
+dotenv.config({ path: join(backendRoot, '.env') });
 
 async function main() {
   const { values } = parseArgs({ options: { name: { type: 'string' }, email: { type: 'string' }, reissue: { type: 'boolean', default: false } } });
@@ -16,7 +21,7 @@ async function main() {
     console.log(`Expires: ${result.expiresAt}. Keep this one-time credential private.`);
   } finally { await pool.end(); }
 }
-main().catch(error => {
-  console.error(error.status || !error.code ? error.message : 'Setup failed. Check migrations, connectivity, and whether the email is already in use.');
+main().catch((error: unknown) => {
+  console.error((error instanceof Error && "status" in error) || !errorCode(error) ? (error instanceof Error ? error.message : 'Unexpected failure.') : 'Setup failed. Check migrations, connectivity, and whether the email is already in use.');
   process.exitCode = 1;
 });

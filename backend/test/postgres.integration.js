@@ -4,8 +4,8 @@ const { readFileSync } = require('node:fs');
 const { join } = require('node:path');
 const { randomUUID } = require('node:crypto');
 const { Pool } = require('pg');
-const { createChatRepository } = require('../src/chat.repository');
-const { createChatService } = require('../src/chat.service');
+const { createChatRepository } = require('../dist/src/chat.repository');
+const { createChatService } = require('../dist/src/chat.service');
 const { ownershipCases } = require('./helpers/ownership-cases');
 
 test('isolated PostgreSQL: migration, concurrent retries, transaction rollback, ownership, and history cursors', { timeout: 60000 }, async t => {

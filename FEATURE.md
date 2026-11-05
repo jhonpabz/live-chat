@@ -67,4 +67,4 @@ The following are planned requirements and suggestions, not completed functional
 
 ### Verification notes
 
-Priority 1 was updated on 2026-10-21. Relevant implementation: `backend/src/accounts.service.js`, `backend/src/chat.service.js`, `backend/src/chat.events.js`, migration `002_agent_ownership.sql`, and the agent-management/inbox frontend. Verification commands and scope are documented in `docs/agent-ownership.md`.
+Priority 1 was updated on 2026-10-21. Relevant implementation: `backend/src/accounts.service.ts`, `backend/src/chat.service.ts`, `backend/src/chat.events.ts`, migration `002_agent_ownership.sql`, and the agent-management/inbox frontend. Verification commands and scope are documented in `docs/agent-ownership.md`.
