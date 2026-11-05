@@ -20,6 +20,14 @@ implemented features and remaining extensions.
 - `backend/test/`: regression tests and isolated PostgreSQL integration tests.
 - `docs/realtime.md`: transport contracts, ordering, recovery, and operational limits.
 
+## Docker setup
+
+Run the entire stack from this repository with Docker Compose. Copy the root
+`.env.example` to `.env`, fill in the two secrets, then run
+`docker compose up -d --build --wait`. Open `http://localhost:8080`.
+See [Docker setup](docs/docker.md) for secret generation, first-admin setup,
+persistent storage, updates, and hosting instructions.
+
 ## Local setup
 
 For a new PC, follow [Clone and install locally](docs/local-installation.md) for

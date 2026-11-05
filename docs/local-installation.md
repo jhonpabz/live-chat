@@ -1,5 +1,8 @@
 # Clone and run the project on another PC
 
+To run everything in containers instead, follow [Docker setup](docker.md).
+That option requires Docker only, with no host Node.js installation.
+
 This guide sets up a new **Windows development PC** using PowerShell. Node.js
 runs the backend and frontend directly on Windows; Docker runs local PostgreSQL
 and Redis services. You do not need an AWS account for local development.

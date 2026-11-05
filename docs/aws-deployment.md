@@ -1,5 +1,9 @@
 # Deploy this Live Chat app to AWS EC2
 
+For a container-based deployment of this same repository, see
+[Docker setup and hosting](docker.md). The guide below installs services
+directly on the host instead.
+
 This guide deploys the current repository to **one Ubuntu 24.04 LTS EC2 instance**.
 It is intended for the practice/test app and a small demonstration deployment.
 It uses Node.js 24, Nginx, PostgreSQL, Redis, and systemd.
